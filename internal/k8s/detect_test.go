@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -325,6 +326,62 @@ func TestDetectProblems_ConfigSignals(t *testing.T) {
 		p := waitForProblem(t, "prod", "Service port mismatch")
 		if p.Kind != "Deployment" || p.Name != "frontend" || !strings.Contains(p.Message, "product-catalog:8082") || !strings.Contains(p.Message, "8080") {
 			t.Fatalf("env Service mismatch problem = %+v", p)
+		}
+	})
+
+	t.Run("env service port mismatch becomes issue while a rollout's new pod is unavailable", func(t *testing.T) {
+		defer ResetTestState()
+
+		replicas := int32(2)
+		client := fake.NewClientset(
+			&appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "frontend", Namespace: "prod", CreationTimestamp: metav1.NewTime(time.Now().Add(-5 * time.Minute)), Generation: 2},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &replicas,
+					Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{
+						Name: "app",
+						Env: []corev1.EnvVar{{
+							Name:  "PRODUCT_CATALOG_ADDR",
+							Value: "product-catalog:8082",
+						}},
+					}}}},
+				},
+				Status: appsv1.DeploymentStatus{
+					ObservedGeneration:  2,
+					Replicas:            3,
+					UpdatedReplicas:     1,
+					ReadyReplicas:       2,
+					AvailableReplicas:   2,
+					UnavailableReplicas: 1,
+					Conditions: []appsv1.DeploymentCondition{{
+						Type:   appsv1.DeploymentAvailable,
+						Status: corev1.ConditionTrue,
+					}, {
+						Type:   appsv1.DeploymentProgressing,
+						Status: corev1.ConditionTrue,
+						Reason: "ReplicaSetUpdated",
+					}},
+				},
+			},
+			&corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "product-catalog", Namespace: "prod"},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{{Port: 8080}},
+				},
+			},
+		)
+		if err := InitTestResourceCache(client); err != nil {
+			t.Fatalf("InitTestResourceCache: %v", err)
+		}
+
+		p := waitForProblem(t, "prod", "Service port mismatch")
+		if p.Kind != "Deployment" || p.Name != "frontend" {
+			t.Fatalf("env Service mismatch problem = %+v", p)
+		}
+		for _, p := range DetectProblems(GetResourceCache(), "prod") {
+			if p.Kind == "Deployment" && p.Name == "frontend" && strings.HasSuffix(p.Reason, " available") {
+				t.Fatalf("surge pod with all desired replicas available must not raise a capacity row: %+v", p)
+			}
 		}
 	})
 
@@ -1738,6 +1795,183 @@ func TestDetectProblems_DeploymentReplicaFailure(t *testing.T) {
 		t.Fatalf("replica failure problem = %+v, want controller message", p)
 	} else if !p.OnsetAt.Equal(retried.Time) || p.IssueTiming != "" || p.IssueTimingBasis != "" {
 		t.Fatalf("late replica failure on never-healthy Deployment = onset:%v timing:%q/%q, want exact condition onset %v and no false healthy-window claim", p.OnsetAt, p.IssueTiming, p.IssueTimingBasis, retried.Time)
+	}
+}
+
+// TestDetectProblems_DeploymentSurgePodIsNotDegraded pins that a RollingUpdate's
+// surge pod does not raise "N/N available". Mid-rollout (2 old + 1 surge, surge
+// not ready yet) the controller reports 1 unavailable while all 2 desired
+// replicas are serving; that is every rollout of a Deployment running
+// maxUnavailable 0, including the default strategy at 1-3 replicas. A dip within
+// maxUnavailable mid-rollout is planned and quiet too; a dip beyond it, or any
+// dip outside a rollout, must still be reported.
+func TestDetectProblems_DeploymentSurgePodIsNotDegraded(t *testing.T) {
+	defer ResetTestState()
+
+	old := metav1.NewTime(time.Now().Add(-1 * time.Hour))
+	zero := intstr.FromInt32(0)
+	one := intstr.FromInt32(1)
+	rollingUpdate := func(surge, unavailable intstr.IntOrString) appsv1.DeploymentStrategy {
+		return appsv1.DeploymentStrategy{
+			Type:          appsv1.RollingUpdateDeploymentStrategyType,
+			RollingUpdate: &appsv1.RollingUpdateDeployment{MaxSurge: &surge, MaxUnavailable: &unavailable},
+		}
+	}
+	rollingConditions := []appsv1.DeploymentCondition{
+		{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionTrue, Reason: "MinimumReplicasAvailable", LastTransitionTime: old},
+		{Type: appsv1.DeploymentProgressing, Status: corev1.ConditionTrue, Reason: "ReplicaSetUpdated", LastTransitionTime: metav1.Now(), LastUpdateTime: metav1.Now()},
+	}
+	client := fake.NewClientset(
+		// Mid-rollout, surge pod still starting: every desired replica serves.
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "checkout", Namespace: "shop", CreationTimestamp: old, Generation: 2},
+			Spec:       appsv1.DeploymentSpec{Replicas: ptrInt32(2), Strategy: rollingUpdate(one, zero)},
+			Status: appsv1.DeploymentStatus{
+				ObservedGeneration:  2,
+				Replicas:            3,
+				UpdatedReplicas:     1,
+				ReadyReplicas:       2,
+				AvailableReplicas:   2,
+				UnavailableReplicas: 1,
+				Conditions:          rollingConditions,
+			},
+		},
+		// Mid-rollout, one pod down within maxUnavailable 1: planned.
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "catalog", Namespace: "shop", CreationTimestamp: old, Generation: 2},
+			Spec:       appsv1.DeploymentSpec{Replicas: ptrInt32(4), Strategy: rollingUpdate(one, one), ProgressDeadlineSeconds: ptrInt32(600)},
+			Status: appsv1.DeploymentStatus{
+				ObservedGeneration:  2,
+				Replicas:            5,
+				UpdatedReplicas:     2,
+				ReadyReplicas:       3,
+				AvailableReplicas:   3,
+				UnavailableReplicas: 2,
+				Conditions:          rollingConditions,
+			},
+		},
+		// Mid-rollout with a dip beyond maxUnavailable: still reported.
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "search", Namespace: "shop", CreationTimestamp: old, Generation: 2},
+			Spec:       appsv1.DeploymentSpec{Replicas: ptrInt32(4), Strategy: rollingUpdate(one, one), ProgressDeadlineSeconds: ptrInt32(600)},
+			Status: appsv1.DeploymentStatus{
+				ObservedGeneration:  2,
+				Replicas:            5,
+				UpdatedReplicas:     2,
+				ReadyReplicas:       2,
+				AvailableReplicas:   2,
+				UnavailableReplicas: 3,
+				Conditions: []appsv1.DeploymentCondition{
+					{Type: appsv1.DeploymentAvailable, Status: corev1.ConditionFalse, Reason: "MinimumReplicasUnavailable", LastTransitionTime: metav1.Now()},
+					{Type: appsv1.DeploymentProgressing, Status: corev1.ConditionTrue, Reason: "ReplicaSetUpdated", LastTransitionTime: metav1.Now()},
+				},
+			},
+		},
+		// Steady state, one replica down: still reported.
+		&appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Name: "payments", Namespace: "shop", CreationTimestamp: old, Generation: 1},
+			Spec:       appsv1.DeploymentSpec{Replicas: ptrInt32(2)},
+			Status: appsv1.DeploymentStatus{
+				ObservedGeneration:  1,
+				Replicas:            2,
+				UpdatedReplicas:     2,
+				ReadyReplicas:       1,
+				AvailableReplicas:   1,
+				UnavailableReplicas: 1,
+			},
+		},
+	)
+
+	if err := InitTestResourceCache(client); err != nil {
+		t.Fatalf("InitTestResourceCache: %v", err)
+	}
+	cache := GetResourceCache()
+	if cache == nil {
+		t.Fatal("cache nil after init")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var problems []Detection
+	for time.Now().Before(deadline) {
+		problems = DetectProblems(cache, "shop")
+		if hasProblem(problems, "Deployment", "payments", "1/2 available") && hasProblem(problems, "Deployment", "search", "2/4 available") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	assertProblem(t, problems, "Deployment", "payments", "1/2 available", "critical")
+	assertProblem(t, problems, "Deployment", "search", "2/4 available", "critical")
+	for _, p := range problems {
+		if p.Kind == "Deployment" && (p.Name == "checkout" || p.Name == "catalog") {
+			t.Fatalf("a rollout within its RollingUpdate budget must not raise a Deployment problem, got %+v", p)
+		}
+	}
+}
+
+func TestDeploymentRolloutDipWithinBudget(t *testing.T) {
+	now := time.Now()
+	cond := func(typ appsv1.DeploymentConditionType, status corev1.ConditionStatus, reason string) appsv1.DeploymentCondition {
+		return appsv1.DeploymentCondition{Type: typ, Status: status, Reason: reason, LastUpdateTime: metav1.NewTime(now.Add(-time.Minute))}
+	}
+	planned := func() *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{Generation: 2},
+			Spec:       appsv1.DeploymentSpec{Replicas: ptrInt32(4), ProgressDeadlineSeconds: ptrInt32(600)},
+			Status: appsv1.DeploymentStatus{
+				ObservedGeneration:  2,
+				AvailableReplicas:   3,
+				UnavailableReplicas: 2,
+				Conditions: []appsv1.DeploymentCondition{
+					cond(appsv1.DeploymentAvailable, corev1.ConditionTrue, "MinimumReplicasAvailable"),
+					cond(appsv1.DeploymentProgressing, corev1.ConditionTrue, "ReplicaSetUpdated"),
+				},
+			},
+		}
+	}
+	withProgressing := func(status corev1.ConditionStatus, reason string) func(*appsv1.Deployment) {
+		return func(d *appsv1.Deployment) {
+			d.Status.Conditions[1] = cond(appsv1.DeploymentProgressing, status, reason)
+		}
+	}
+	cases := []struct {
+		name   string
+		mutate func(*appsv1.Deployment)
+		want   bool
+	}{
+		{"rolling within budget", func(*appsv1.Deployment) {}, true},
+		{"new ReplicaSet just created", withProgressing(corev1.ConditionTrue, "NewReplicaSetCreated"), true},
+		{"progress deadline just enabled, no rollout", withProgressing(corev1.ConditionTrue, "FoundNewReplicaSet"), false},
+		{"last progress older than the deadline", func(d *appsv1.Deployment) {
+			d.Status.Conditions[1].LastUpdateTime = metav1.NewTime(now.Add(-11 * time.Minute))
+		}, false},
+		{"last progress slightly ahead of this clock", func(d *appsv1.Deployment) {
+			d.Status.Conditions[1].LastUpdateTime = metav1.NewTime(now.Add(30 * time.Second))
+		}, true},
+		{"last progress further ahead than clock skew", func(d *appsv1.Deployment) {
+			d.Status.Conditions[1].LastUpdateTime = metav1.NewTime(now.Add(5 * time.Minute))
+		}, false},
+		{"steady state after the rollout completed", withProgressing(corev1.ConditionTrue, "NewReplicaSetAvailable"), false},
+		{"progress deadline exceeded", withProgressing(corev1.ConditionFalse, "ProgressDeadlineExceeded"), false},
+		{"resumed, no progress yet", withProgressing(corev1.ConditionUnknown, "DeploymentResumed"), false},
+		{"beyond budget", func(d *appsv1.Deployment) {
+			d.Status.Conditions[0] = cond(appsv1.DeploymentAvailable, corev1.ConditionFalse, "MinimumReplicasUnavailable")
+		}, false},
+		{"no Progressing condition", func(d *appsv1.Deployment) { d.Status.Conditions = d.Status.Conditions[:1] }, false},
+		{"paused with a stale rolling condition", func(d *appsv1.Deployment) { d.Spec.Paused = true }, false},
+		{"no progress deadline field", func(d *appsv1.Deployment) { d.Spec.ProgressDeadlineSeconds = nil }, false},
+		{"progress deadline disabled", func(d *appsv1.Deployment) { d.Spec.ProgressDeadlineSeconds = ptrInt32(math.MaxInt32) }, false},
+		{"status from an older generation", func(d *appsv1.Deployment) { d.Status.ObservedGeneration = 1 }, false},
+		{"nothing available, even within budget", func(d *appsv1.Deployment) { d.Status.AvailableReplicas = 0 }, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d := planned()
+			tc.mutate(d)
+			if got := deploymentRolloutDipWithinBudget(d, now); got != tc.want {
+				t.Fatalf("deploymentRolloutDipWithinBudget = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
