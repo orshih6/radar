@@ -225,6 +225,43 @@ func TestRollbackDeploymentConflictSaysTheWorkloadChanged(t *testing.T) {
 	}
 }
 
+// A controller status write between the read and the patch bumps the
+// resourceVersion; the rollback re-reads and succeeds instead of failing.
+func TestRollbackRetriesAfterTransientConflict(t *testing.T) {
+	cases := []struct {
+		kind, name string
+		objects    []runtime.Object
+	}{
+		{"Deployment", "web", []runtime.Object{
+			deploymentObject(podTemplateV2(), nil, nil),
+			deploymentReplicaSet("web-h1", "1", "h1", podTemplateV1(), nil),
+		}},
+		{"StatefulSet", "db", []runtime.Object{
+			controllerWorkload("StatefulSet", "db", podTemplateV2()),
+			controllerRevisionObject("db", "StatefulSet", "db-1", 1, podTemplateV1()),
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			client := newAppsClient(tc.objects...)
+			attempts := 0
+			client.PrependReactor("patch", "*", func(clienttesting.Action) (bool, runtime.Object, error) {
+				attempts++
+				if attempts == 1 {
+					return true, nil, apierrors.NewConflict(schema.GroupResource{Group: "apps", Resource: "x"}, tc.name, errors.New("the object has been modified"))
+				}
+				return true, nil, nil
+			})
+			if err := NewWorkloadManager(client, appsDiscovery()).RollbackWorkload(context.Background(), tc.kind, "prod", tc.name, 1); err != nil {
+				t.Fatalf("RollbackWorkload: %v", err)
+			}
+			if attempts != 2 {
+				t.Fatalf("patch attempts = %d, want 2", attempts)
+			}
+		})
+	}
+}
+
 // Annotations follow kubectl rollout undo: the controller's bookkeeping stays
 // from the live Deployment; everything else (change-cause included) comes back
 // from the target revision, and annotations added since are dropped.

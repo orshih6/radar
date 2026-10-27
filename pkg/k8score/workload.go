@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/yaml"
 
 	"github.com/skyhook-io/radar/pkg/rollouts"
@@ -1194,19 +1195,25 @@ func (m *WorkloadManager) RollbackWorkload(ctx context.Context, kind, namespace,
 		return fmt.Errorf("unknown resource kind: %s", kind)
 	}
 
-	workload, err := m.dynClient.Resource(workloadGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get workload: %w", err)
-	}
-
 	switch normalizedKind {
-	case "deployments":
-		return m.rollbackDeployment(ctx, workload, revision)
-	case "statefulsets", "daemonsets":
-		return m.rollbackControllerRevision(ctx, normalizedKind, workload, revision)
+	case "deployments", "statefulsets", "daemonsets":
 	default:
 		return fmt.Errorf("rollback not supported for %s", kind)
 	}
+
+	// The patch pins the resourceVersion that was read, and controller status
+	// writes bump it, so a rollback during an active rollout can conflict without
+	// any change to the template. Each retry re-reads and re-compares.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		workload, err := m.dynClient.Resource(workloadGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get workload: %w", err)
+		}
+		if normalizedKind == "deployments" {
+			return m.rollbackDeployment(ctx, workload, revision)
+		}
+		return m.rollbackControllerRevision(ctx, normalizedKind, workload, revision)
+	})
 }
 
 // ErrWorkloadPaused: a paused Deployment would hold a restored template without
