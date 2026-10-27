@@ -67,9 +67,13 @@ describe('buildArgoSyncOpts', () => {
       .toEqual(['Validate=false', 'ServerSideApply=true'])
   })
 
-  it("leaves out the Application's other options only when asked", () => {
-    expect(buildArgoSyncOpts({ ...base, resourceMode: false, applicationSyncOptions: ['CreateNamespace=true'], keepApplicationSyncOptions: false }).syncOptions)
-      .toEqual([])
+  it('preserves every other option string when editing either owned key', () => {
+    const applicationSyncOptions = ['FailOnSharedResource=true', 'PrunePropagationPolicy=orphan', 'Validate=false', 'Custom=opaque', 'Custom=opaque', 'Replace=false', 'ServerSideApply=false']
+    const otherOptions = applicationSyncOptions.slice(0, -2)
+    expect(buildArgoSyncOpts({ ...base, resourceMode: false, replace: true, applicationSyncOptions }).syncOptions)
+      .toEqual([...otherOptions, 'Replace=true'])
+    expect(buildArgoSyncOpts({ ...base, resourceMode: false, serverSideApply: true, applicationSyncOptions }).syncOptions)
+      .toEqual([...otherOptions, 'ServerSideApply=true'])
   })
 })
 

@@ -497,9 +497,10 @@ func syncArgoApp(ctx context.Context, dynClient dynamic.Interface, namespace, na
 // deploys (except on an Argo CD 2.11 controller, which takes a multi-source
 // Application's sources from its spec). Unlike argocd-server, which asks its
 // repo-server to resolve the revision to a commit or chart version at request
-// time, Radar has no repo-server to ask: the revision (the caller's for a
-// single-source Application, or each source's targetRevision when omitted)
-// is resolved by the controller when the sync runs.
+// time, Radar has no repo-server to ask. An omitted revision uses the last
+// compared revision(s) only when the compared sources match this snapshot;
+// otherwise the controller resolves the target when the sync runs. Explicit
+// branch names remain floating, including across retries.
 //
 // The Application's spec.syncPolicy.retry is copied too, except for Radar's
 // own validation dry-run, whose result would otherwise wait out the backoff.
@@ -555,8 +556,21 @@ func argoSyncOperation(ctx context.Context, app *unstructured.Unstructured, opts
 	}
 	if sources, _, _ := unstructured.NestedSlice(app.Object, "spec", "sources"); len(sources) > 0 {
 		sync["sources"] = sources
+		if opts.Revision == "" && validationID == "" {
+			comparedSources, _, _ := unstructured.NestedSlice(app.Object, "status", "sync", "comparedTo", "sources")
+			revisions, _, _ := unstructured.NestedStringSlice(app.Object, "status", "sync", "revisions")
+			if len(revisions) == len(sources) && reflect.DeepEqual(sources, comparedSources) {
+				sync["revisions"] = revisions
+			}
+		}
 	} else if source, _, _ := unstructured.NestedMap(app.Object, "spec", "source"); len(source) > 0 {
 		sync["source"] = source
+		if opts.Revision == "" && validationID == "" {
+			comparedSource, _, _ := unstructured.NestedMap(app.Object, "status", "sync", "comparedTo", "source")
+			if reflect.DeepEqual(source, comparedSource) {
+				sync["revision"], _, _ = unstructured.NestedString(app.Object, "status", "sync", "revision")
+			}
+		}
 	}
 
 	operation := map[string]any{

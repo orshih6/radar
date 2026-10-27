@@ -56,10 +56,10 @@ it('starts with prune off and submits nothing for the options, so the Applicatio
   expect(confirmed).toEqual([{ revision: undefined, prune: false, dryRun: false, force: false, applyOnly: false }])
 })
 
-it('hides the revision for multi-source Applications and syncs their target revisions', async () => {
+it('hides the revision for multi-source Applications and explains comparison pinning', async () => {
   await render({ multiSource: true })
   expect(document.body.textContent).not.toContain('Revision (optional)')
-  expect(document.body.textContent).toContain("Each source uses its own targetRevision.")
+  expect(document.body.textContent).toContain("Syncs each source's last compared revision.")
   await click(button('Sync now'))
   expect(confirmed[0].revision).toBeUndefined()
 })
@@ -79,6 +79,7 @@ it('omits an entered revision if the Application becomes multi-source while open
 it('explains selective sync hooks, dependencies and namespace management without denying wave ordering', async () => {
   await render({ resource: { kind: 'Deployment', group: 'apps', namespace: 'guestbook', name: 'web' } })
   expect(document.body.textContent).toContain('Syncs only the selected resources, without hooks. Dependencies outside the selection are not synced. Application namespace creation options still apply.')
+  expect(document.body.textContent).toContain('Syncs the last compared revision.')
   expect(document.body.textContent).not.toContain('Only this resource will be applied')
   expect(document.body.textContent).not.toContain('bypasses hooks and normal sync-wave ordering')
 })
@@ -138,12 +139,21 @@ it("sends the Application's options with one edit when a toggle changes", async 
   expect(confirmed[0]).toMatchObject({ prune: true, syncOptions: ['CreateNamespace=true'] })
 })
 
-it("drops the Application's other options only through the Keep switch", async () => {
-  await render()
-  expect(toggle("Keep the Application's other sync options").checked).toBe(true)
-  await click(toggle("Keep the Application's other sync options"))
+it('lists all other options read-only and preserves them when either toggle changes', async () => {
+  const otherOptions = ['CreateNamespace=true', 'FailOnSharedResource=true', 'PrunePropagationPolicy=orphan', 'Validate=false', 'Custom=opaque']
+  await render({ applicationSyncOptions: [...otherOptions, 'Replace=false', 'ServerSideApply=true'] })
+  expect(document.body.textContent).toContain('Also used for this sync')
+  expect([...document.querySelectorAll('li')].map((li) => li.textContent)).toEqual(otherOptions)
+  expect(document.body.textContent).not.toContain("Keep the Application's other sync options")
+  expect(document.querySelectorAll('input[type="checkbox"]')).toHaveLength(6)
   await click(button('Sync now'))
-  expect(confirmed[0].syncOptions).toEqual(['ServerSideApply=true'])
+  expect(confirmed[0]).not.toHaveProperty('syncOptions')
+  await click(toggle('Replace'))
+  await click(button('Sync now'))
+  expect(confirmed[1].syncOptions).toEqual([...otherOptions, 'Replace=true', 'ServerSideApply=true'])
+  await click(toggle('Server-side apply'))
+  await click(button('Sync now'))
+  expect(confirmed[2].syncOptions).toEqual([...otherOptions, 'Replace=true'])
 })
 
 it('builds the selective sync and its dry-run from the same options', async () => {
@@ -187,7 +197,7 @@ it("keeps the user's dry-run and revision when the Application's options change 
   expect(toggle('Server-side apply').checked).toBe(false)
   expect(onValidationReset).toHaveBeenCalledTimes(1)
   expect(document.body.textContent).not.toContain(STALE_OPTIONS_NOTICE)
-  expect(toggle("Keep the Application's other sync options").checked).toBe(true)
+  expect(document.body.textContent).toContain('Also used for this sync')
   await click(button('Run dry-run'))
   expect(confirmed[0]).toEqual({ revision: 'release-1', prune: false, dryRun: true, force: false, applyOnly: false })
 })
@@ -200,7 +210,7 @@ it("keeps the user's option edits when the Application's options change while op
   expect(document.body.textContent).not.toContain(STALE_OPTIONS_NOTICE)
   await render({ applicationSyncOptions: ['PruneLast=true'] })
   expect(document.body.textContent).toContain(STALE_OPTIONS_NOTICE)
-  expect(toggle('Keep the other sync options shown here').checked).toBe(true)
+  expect([...document.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['CreateNamespace=true'])
   expect(document.body.textContent).not.toContain("Keep the Application's other sync options")
   expect(toggle('Replace').checked).toBe(true)
   expect(toggle('Server-side apply').checked).toBe(true)
@@ -226,14 +236,14 @@ it('clears the stale-options notice when live options match again or the dialog 
   expect(document.body.textContent).toContain(STALE_OPTIONS_NOTICE)
   await render()
   expect(document.body.textContent).not.toContain(STALE_OPTIONS_NOTICE)
-  expect(toggle("Keep the Application's other sync options").checked).toBe(true)
+  expect(document.body.textContent).toContain('Also used for this sync')
   await render({ applicationSyncOptions: ['PruneLast=true'] })
   expect(document.body.textContent).toContain(STALE_OPTIONS_NOTICE)
   await render({ open: false, applicationSyncOptions: ['PruneLast=true'] })
   await render({ applicationSyncOptions: ['PruneLast=true'] })
   expect(document.body.textContent).not.toContain(STALE_OPTIONS_NOTICE)
   expect(toggle('Replace').checked).toBe(false)
-  expect(toggle("Keep the Application's other sync options").checked).toBe(true)
+  expect(document.body.textContent).toContain('Also used for this sync')
   await click(button('Sync now'))
   expect(confirmed[0]).not.toHaveProperty('syncOptions')
 })
@@ -243,7 +253,7 @@ it('shows the stale-options notice even when the snapshot has no other options',
   await click(toggle('Replace'))
   await render({ applicationSyncOptions: ['PruneLast=true'] })
   expect(document.body.textContent).toContain(STALE_OPTIONS_NOTICE)
-  expect(document.body.textContent).not.toContain('Keep the other sync options shown here')
+  expect(document.body.textContent).not.toContain('Also used for this sync')
   await click(button('Sync now'))
   expect(confirmed[0].syncOptions).toEqual(['Replace=true'])
 })
@@ -277,5 +287,30 @@ it('omits a previously entered revision when auto-sync becomes enabled while ope
   await render({ autoSyncEnabled: true })
   expect(revision.disabled).toBe(true)
   await click(button('Sync now'))
+  expect(confirmed[0].revision).toBeUndefined()
+})
+
+it.each([
+  { comparedRevision: 'abcdef0123456789abcdef0123456789abcdef01', label: ' (abcdef0)' },
+  { comparedRevision: 'chart-version-1.2.3', label: ' (chart-version-1.2.3)' },
+  { comparedRevision: undefined, label: '' },
+])('explains empty revision pinning with comparison $comparedRevision', async ({ comparedRevision, label }) => {
+  await render({ comparedRevision })
+  expect(document.body.textContent).toContain(`Leave empty to sync the last compared revision${label}.`)
+  await click(button('Sync now'))
+  expect(confirmed[0].revision).toBeUndefined()
+})
+
+it('distinguishes a selective validation target from its compared sync target', async () => {
+  await render({
+    resource: { kind: 'Deployment', group: 'apps', namespace: 'guestbook', name: 'web' },
+    comparedRevision: 'abcdef0123456789abcdef0123456789abcdef01',
+    onValidate: (opts) => validated.push(opts),
+  })
+  expect(document.body.textContent).toContain('Syncs the last compared revision (abcdef0)')
+  expect(document.body.textContent).toContain('The dry run checks the latest revision, which can differ from the one synced.')
+  await click(button('Dry-run'))
+  await click(button('Sync resource'))
+  expect(validated[0].revision).toBeUndefined()
   expect(confirmed[0].revision).toBeUndefined()
 })

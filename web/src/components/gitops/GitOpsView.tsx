@@ -366,6 +366,7 @@ function GitOpsTableView({ namespaces, onClearNamespaces }: { namespaces: string
         open={!!syncDialogRow}
         appLabel={syncDialogRow ? `${syncDialogRow.namespace}/${syncDialogRow.name}` : ''}
         multiSource={Array.isArray(syncDialogRow?.raw?.spec?.sources) && syncDialogRow.raw.spec.sources.length > 0}
+        comparedRevision={syncDialogRow?.raw?.status?.sync?.revision}
         applicationSyncOptions={argoApplicationSyncOptions(syncDialogRow?.raw)}
         autoSyncEnabled={!!syncDialogRow && isArgoAutoSyncEnabled(syncDialogRow.raw)}
         pending={argoSync.isPending}
@@ -926,6 +927,7 @@ function GitOpsDetailView({ namespaces, onOpenResource, onOpenSettings }: GitOps
             appLabel={`${namespace}/${name}`}
             multiSource={Array.isArray(resourceQ.data?.spec?.sources) && resourceQ.data.spec.sources.length > 0}
             resource={syncDialogTarget?.scope === 'resource' ? syncDialogTarget.resource : undefined}
+            comparedRevision={resourceQ.data?.status?.sync?.revision}
             applicationSyncOptions={appSyncOptions}
             pending={argoSync.isPending}
             autoSyncEnabled={argoAutoSyncEnabled}

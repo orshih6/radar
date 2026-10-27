@@ -984,7 +984,7 @@ func argoSyncWindowBlockedIssue(phase string, root *unstructured.Unstructured) *
 		Scope:    ScopeOperation,
 		Reason:   "SyncWindowBlocked",
 		Message:  "A sync window is holding this sync. Argo CD continues it when the AppProject's sync windows allow syncing.",
-		Action:   "Wait for the window, or terminate the operation to drop it. A terminated operation stays Terminating until a window allows syncing; it applies nothing more, and changes already applied stay.",
+		Action:   "Wait for the window, or terminate the operation to drop it. A terminated operation stays Terminating until a window allows syncing; it applies nothing more, and changes already applied stay. Changing the Application's source settings does not update a sync already waiting; terminate it and sync again after such edits.",
 	}
 }
 

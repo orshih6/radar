@@ -19,8 +19,7 @@ import type { GitOpsInsightRef } from '../../types/gitops-insights'
 // Sync options start from the Application's own (applicationSyncOptions). A
 // sync whose options the user leaves alone sends none, so Radar applies the
 // Application's current ones; flipping Replace or Server-side apply sends the
-// Application's options with that edit; leaving out the rest takes the
-// deliberate "Keep the Application's other sync options" switch.
+// Application's options with that edit, keeping all other options.
 // =============================================================================
 
 // ArgoSyncOpts is the payload shape the dialog passes to its onConfirm
@@ -45,6 +44,7 @@ export interface SyncOptionsDialogProps {
   open: boolean
   appLabel: string
   multiSource?: boolean
+  comparedRevision?: string
   resource?: GitOpsInsightRef
   // The Application's spec.syncPolicy.syncOptions. Without it the toggles
   // are disabled and the submitted syncOptions are omitted.
@@ -70,7 +70,7 @@ export interface ResourceValidationResult {
   }
 }
 
-export function SyncOptionsDialog({ open, appLabel, multiSource, resource, applicationSyncOptions, pending, autoSyncEnabled, validationPending, operationInProgress, validationResult, validationError, onCancel, onConfirm, onValidate, onValidationReset }: SyncOptionsDialogProps) {
+export function SyncOptionsDialog({ open, appLabel, multiSource, comparedRevision, resource, applicationSyncOptions, pending, autoSyncEnabled, validationPending, operationInProgress, validationResult, validationError, onCancel, onConfirm, onValidate, onValidationReset }: SyncOptionsDialogProps) {
   const titleId = useId()
   const syncOptionsUnknown = applicationSyncOptions === undefined
   const liveAppOptions = applicationSyncOptions ?? EMPTY_OPTIONS
@@ -85,6 +85,7 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
   const appReplace = appOptions.includes(REPLACE_OPTION)
   const appServerSideApply = appOptions.includes(SERVER_SIDE_APPLY_OPTION)
   const otherAppOptions = appOptions.filter((option) => !isToggledOption(option))
+  const comparedRevisionLabel = comparedRevision && /^[0-9a-f]{40}$/i.test(comparedRevision) ? comparedRevision.slice(0, 7) : comparedRevision
   const [revision, setRevision] = useState('')
   const [prune, setPrune] = useState(false)
   const [dryRun, setDryRun] = useState(false)
@@ -92,7 +93,6 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
   const [applyOnly, setApplyOnly] = useState(false)
   const [replace, setReplace] = useState(appReplace)
   const [serverSideApply, setServerSideApply] = useState(appServerSideApply)
-  const [keepApplicationSyncOptions, setKeepApplicationSyncOptions] = useState(true)
   const richResourceValidation = !!resource && !!onValidate
   const busy = !!pending || !!validationPending
   const optionsDisabled = busy || !!operationInProgress
@@ -102,7 +102,6 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
     setAppOptions(options)
     setReplace(options.includes(REPLACE_OPTION))
     setServerSideApply(options.includes(SERVER_SIDE_APPLY_OPTION))
-    setKeepApplicationSyncOptions(true)
   }
 
   // Reset on each open so a previous attempt's flags don't leak into the
@@ -134,7 +133,7 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
   // what the toggles show only while the snapshot is still current.
   const optionEdits = syncOptionsUnknown
     ? { replace: false, serverSideApply: false }
-    : { replace, serverSideApply, applicationSyncOptions: appOptions, keepApplicationSyncOptions, sendUnchanged: appOptions.join('\n') !== liveAppOptionsKey }
+    : { replace, serverSideApply, applicationSyncOptions: appOptions, sendUnchanged: appOptions.join('\n') !== liveAppOptionsKey }
 
   function submit() {
     onConfirm(buildArgoSyncOpts({ resourceMode: !!resource, revision: multiSource || revisionDisabled ? '' : revision, prune, dryRun: richResourceValidation ? false : dryRun, force, applyOnly, ...optionEdits }))
@@ -172,6 +171,14 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
                 <p className="mt-1 text-[11px] leading-relaxed text-theme-text-secondary">
                   Syncs only the selected resources, without hooks. Dependencies outside the selection are not synced. Application namespace creation options still apply.
                 </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-theme-text-secondary">
+                  Syncs the last compared revision{!multiSource && comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''}.
+                </p>
+                {richResourceValidation && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-theme-text-secondary">
+                    The dry run checks the latest revision, which can differ from the one synced.
+                  </p>
+                )}
                 {autoSyncEnabled && (
                   <p className="mt-2 border-t border-amber-500/20 pt-2 text-[11px] leading-relaxed text-theme-text-secondary">
                     Auto-sync is enabled. Argo can reconcile this Application independently while the dry-run runs; a dry-run does not pause automation.
@@ -187,19 +194,20 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
             <Input
               value={revision}
               onChange={(e) => setRevision(e.target.value)}
-              placeholder="HEAD"
+              placeholder="Last compared revision"
               disabled={optionsDisabled || revisionDisabled}
               className="mt-1 w-full rounded-md border border-theme-border bg-theme-base px-2 py-1.5 font-mono text-xs text-theme-text-primary outline-none placeholder:text-theme-text-tertiary focus:border-sky-500"
             />
             <span className="mt-0.5 block text-[11px] text-theme-text-tertiary">
-              {autoSyncEnabled
-                ? "Auto-sync is enabled. Sync uses the Application's targetRevision. Disable auto-sync to deploy another revision; dry runs can preview one."
-                : "Branch, tag, or commit SHA. Leave empty to use the Application's targetRevision."}
+              Branch, tag, or commit SHA. Leave empty to sync the last compared revision{comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''}.
             </span>
+            {autoSyncEnabled && <span className="mt-0.5 block text-[11px] text-theme-text-tertiary">
+              Auto-sync is enabled. Disable auto-sync to deploy another revision; dry runs can preview one.
+            </span>}
           </label>
         )}
         {!resource && multiSource && (
-          <p className="text-xs text-theme-text-tertiary">Each source uses its own targetRevision.</p>
+          <p className="text-xs text-theme-text-tertiary">Syncs each source's last compared revision.</p>
         )}
 
         {/* Common (Prune / Dry run) sit above a divider; Advanced toggles
@@ -225,15 +233,12 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, resource, appli
             <p className="text-xs text-theme-text-secondary">The Application's sync options changed while this dialog was open. This sync uses the options shown here. Cancel and reopen to load the latest.</p>
           )}
           {otherAppOptions.length > 0 && (
-            <Toggle
-              label={optionsChangedWhileEditing ? "Keep the other sync options shown here" : "Keep the Application's other sync options"}
-              checked={keepApplicationSyncOptions}
-              onChange={(value) => updateSyncOption(setKeepApplicationSyncOptions, value)}
-              disabled={optionsDisabled}
-              hint={keepApplicationSyncOptions
-                ? `${otherAppOptions.join(', ')}. Turn off to sync without them.`
-                : `This sync leaves out ${otherAppOptions.join(', ')} and uses only the options above.`}
-            />
+            <div>
+              <div className="text-xs font-medium text-theme-text-secondary">Also used for this sync</div>
+              <ul className="mt-1 space-y-1 text-[11px] text-theme-text-tertiary">
+                {otherAppOptions.map((option, index) => <li key={index} className="break-all font-mono">{option}</li>)}
+              </ul>
+            </div>
           )}
         </fieldset>
         {richResourceValidation && (validationPending || validationResult || validationError) && (
@@ -340,7 +345,7 @@ function isToggledOption(option: string): boolean {
   return key === 'Replace' || key === 'ServerSideApply'
 }
 
-export function buildArgoSyncOpts({ resourceMode, revision, prune, dryRun, force, applyOnly, replace, serverSideApply, applicationSyncOptions = EMPTY_OPTIONS, keepApplicationSyncOptions = true, sendUnchanged = false }: {
+export function buildArgoSyncOpts({ resourceMode, revision, prune, dryRun, force, applyOnly, replace, serverSideApply, applicationSyncOptions = EMPTY_OPTIONS, sendUnchanged = false }: {
   resourceMode: boolean
   revision: string
   prune: boolean
@@ -350,7 +355,6 @@ export function buildArgoSyncOpts({ resourceMode, revision, prune, dryRun, force
   replace: boolean
   serverSideApply: boolean
   applicationSyncOptions?: string[]
-  keepApplicationSyncOptions?: boolean
   // Send the options even when the toggles match applicationSyncOptions,
   // because those are no longer the Application's current ones.
   sendUnchanged?: boolean
@@ -362,12 +366,11 @@ export function buildArgoSyncOpts({ resourceMode, revision, prune, dryRun, force
     force,
     applyOnly: resourceMode ? false : applyOnly,
   }
-  const unchanged = keepApplicationSyncOptions &&
-    replace === applicationSyncOptions.includes(REPLACE_OPTION) &&
+  const unchanged = replace === applicationSyncOptions.includes(REPLACE_OPTION) &&
     serverSideApply === applicationSyncOptions.includes(SERVER_SIDE_APPLY_OPTION)
   if (unchanged && !sendUnchanged) return opts
 
-  const syncOptions = keepApplicationSyncOptions ? applicationSyncOptions.filter((option) => !isToggledOption(option)) : []
+  const syncOptions = applicationSyncOptions.filter((option) => !isToggledOption(option))
   if (replace) syncOptions.push(REPLACE_OPTION)
   if (serverSideApply) syncOptions.push(SERVER_SIDE_APPLY_OPTION)
   return { ...opts, syncOptions }

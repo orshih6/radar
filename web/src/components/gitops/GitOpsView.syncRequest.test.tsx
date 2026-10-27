@@ -18,7 +18,7 @@ const app = {
   kind: 'Application',
   metadata: { name: 'guestbook', namespace: 'argocd' },
   spec: { project: 'default', source: {}, sources: undefined as Array<{ repoURL: string; targetRevision: string }> | undefined, destination: {}, syncPolicy: { syncOptions: APP_OPTIONS } },
-  status: { sync: { status: 'OutOfSync' }, health: { status: 'Healthy' } },
+  status: { sync: { status: 'OutOfSync', revision: undefined as string | undefined }, health: { status: 'Healthy' } },
 }
 const insight = {
   summary: { tool: 'argocd', kind: 'Application', namespace: 'argocd', name: 'guestbook', autoSyncMode: 'Manual' },
@@ -100,6 +100,7 @@ afterEach(async () => {
   host.remove()
   document.body.innerHTML = ''
   app.spec.sources = undefined
+  app.status.sync.revision = undefined
   vi.unstubAllGlobals()
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
 })
@@ -191,7 +192,7 @@ it('treats a Radar whose capabilities have not loaded as older', async () => {
 it.each([
   '/gitops',
   '/gitops/detail/applications/argocd/guestbook?apiGroup=argoproj.io',
-])('uses each source target revision when syncing from %s', async (path) => {
+])('explains compared revisions for multi-source sync from %s', async (path) => {
   app.spec.sources = [
     { repoURL: 'https://example.com/app', targetRevision: 'main' },
     { repoURL: 'https://example.com/values', targetRevision: 'v1' },
@@ -199,9 +200,21 @@ it.each([
   await renderView(path)
   await click(button('Open sync'))
   expect(document.body.textContent).not.toContain('Revision (optional)')
-  expect(document.body.textContent).toContain('Each source uses its own targetRevision.')
+  expect(document.body.textContent).toContain("Syncs each source's last compared revision.")
   await click(button('Sync now'))
   expect(requests).toHaveLength(1)
+  expect(requests[0].body).not.toHaveProperty('revision')
+})
+
+it.each([
+  '/gitops',
+  '/gitops/detail/applications/argocd/guestbook?apiGroup=argoproj.io',
+])('shows the compared revision in the sync dialog from %s', async (path) => {
+  app.status.sync.revision = 'abcdef0123456789abcdef0123456789abcdef01'
+  await renderView(path)
+  await click(button('Open sync'))
+  expect(document.body.textContent).toContain('Leave empty to sync the last compared revision (abcdef0)')
+  await click(button('Sync now'))
   expect(requests[0].body).not.toHaveProperty('revision')
 })
 

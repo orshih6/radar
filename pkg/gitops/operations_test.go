@@ -1813,6 +1813,83 @@ func TestSyncArgoAppRechecksAutoSyncRevisionAfterConflict(t *testing.T) {
 	}
 }
 
+func TestArgoSyncOperationPinsComparedRevisions(t *testing.T) {
+	source := map[string]any{"repoURL": "https://example.com/repo", "path": "app", "targetRevision": "main"}
+	otherSource := map[string]any{"repoURL": "https://example.com/values", "ref": "values", "targetRevision": "main"}
+	sources := []any{source, otherSource}
+	single := map[string]any{"source": source}
+	multi := map[string]any{"sources": sources}
+	singleComparison := map[string]any{"revision": "compared-sha", "comparedTo": single}
+	multiComparison := map[string]any{"revisions": []any{"app-sha", "values-sha"}, "comparedTo": multi}
+	dryRun := true
+	tests := []struct {
+		name          string
+		spec          map[string]any
+		comparison    map[string]any
+		opts          ArgoSyncOptions
+		validationID  string
+		wantRevision  string
+		wantRevisions []string
+	}{
+		{name: "single source", spec: single, comparison: singleComparison, wantRevision: "compared-sha"},
+		{name: "multiple sources", spec: multi, comparison: multiComparison, wantRevisions: []string{"app-sha", "values-sha"}},
+		{name: "one plural source", spec: map[string]any{"sources": []any{source}}, comparison: map[string]any{"revisions": []any{"app-sha"}, "comparedTo": map[string]any{"sources": []any{source}}}, wantRevisions: []string{"app-sha"}},
+		{name: "single source changed", spec: single, comparison: map[string]any{"revision": "old-sha", "comparedTo": map[string]any{"source": otherSource}}},
+		{name: "multiple sources changed", spec: multi, comparison: map[string]any{"revisions": []any{"app-sha", "values-sha"}, "comparedTo": map[string]any{"sources": []any{otherSource, source}}}},
+		{name: "incomplete revisions", spec: multi, comparison: map[string]any{"revisions": []any{"app-sha"}, "comparedTo": multi}},
+		{name: "too many revisions", spec: multi, comparison: map[string]any{"revisions": []any{"app-sha", "values-sha", "extra"}, "comparedTo": multi}},
+		{name: "missing comparison", spec: single},
+		{name: "missing single revision", spec: single, comparison: map[string]any{"comparedTo": single}},
+		{name: "missing plural revisions", spec: multi, comparison: map[string]any{"comparedTo": multi}},
+		{name: "explicit branch", spec: single, comparison: singleComparison, opts: ArgoSyncOptions{Revision: "main"}, wantRevision: "main"},
+		{name: "explicit commit", spec: single, comparison: singleComparison, opts: ArgoSyncOptions{Revision: "requested-sha"}, wantRevision: "requested-sha"},
+		{name: "user dry-run", spec: single, comparison: singleComparison, opts: ArgoSyncOptions{DryRun: &dryRun}, wantRevision: "compared-sha"},
+		{name: "single validation dry-run", spec: single, comparison: singleComparison, opts: ArgoSyncOptions{DryRun: &dryRun}, validationID: "validation"},
+		{name: "plural validation dry-run", spec: multi, comparison: multiComparison, opts: ArgoSyncOptions{DryRun: &dryRun}, validationID: "validation"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, refresh := range []bool{false, true} {
+				app := argoAppForTest("argocd", "demo", nil)
+				if err := unstructured.SetNestedMap(app.Object, tc.spec, "spec"); err != nil {
+					t.Fatal(err)
+				}
+				if tc.comparison != nil {
+					if err := unstructured.SetNestedMap(app.Object, tc.comparison, "status", "sync"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				retry := map[string]any{"limit": int64(3), "refresh": refresh, "backoff": map[string]any{"duration": "5s"}}
+				if err := unstructured.SetNestedMap(app.Object, retry, "spec", "syncPolicy", "retry"); err != nil {
+					t.Fatal(err)
+				}
+				before := app.DeepCopy()
+				operation := argoSyncOperation(context.Background(), app, tc.opts, tc.validationID)
+				sync := nestedMap(operation, "sync")
+				if got := sync["revision"]; got != tc.wantRevision {
+					t.Fatalf("revision = %#v, want %q", got, tc.wantRevision)
+				}
+				if got := sync["revisions"]; tc.wantRevisions != nil && !reflect.DeepEqual(got, tc.wantRevisions) || tc.wantRevisions == nil && got != nil {
+					t.Fatalf("revisions = %#v, want %#v", got, tc.wantRevisions)
+				}
+				if !reflect.DeepEqual(argoSyncSources(sync), argoSyncSources(tc.spec)) {
+					t.Fatalf("sync sources = %#v, want %#v", argoSyncSources(sync), argoSyncSources(tc.spec))
+				}
+				if tc.validationID != "" {
+					if _, ok := operation["retry"]; ok {
+						t.Fatal("validation must not inherit retry")
+					}
+				} else if !reflect.DeepEqual(operation["retry"], retry) {
+					t.Fatalf("retry = %#v, want %#v", operation["retry"], retry)
+				}
+				if !reflect.DeepEqual(app, before) {
+					t.Fatal("building the operation changed the Application")
+				}
+			}
+		})
+	}
+}
+
 // The sync fixes the Application's source(s) when it is requested, as
 // argocd-server does, so a sync waiting behind a window deploys what was
 // there when it was asked for.
