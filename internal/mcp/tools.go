@@ -59,7 +59,7 @@ import (
 // steers. Put conditional advice in response guidance so it arrives when
 // relevant; otherwise describe only fields whose names are insufficient for
 // correct interpretation, not every response field.
-const autoInstrumentationContract = "autoInstrumentation evaluates current configuration for a hypothetical NEW Pod only. Even resolved or disabled says nothing about whether an existing Pod was injected. default_ambiguous means multiple readable Instrumentation CRs assuming operator CRD mode; inline operator configuration can differ. Inspect actual Pod spec/init-container status/events for observed mutation."
+const autoInstrumentationContract = "autoInstrumentation evaluates NEW Pod creation only, never existing injection. resolved/disabled are configuration outcomes. default_ambiguous means multiple Instrumentation CRs, assuming operator CRD mode."
 
 func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramRegistry *toolParamRegistry) {
 	boolPtr := func(b bool) *bool { return &b }
