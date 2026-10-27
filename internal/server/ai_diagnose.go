@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/skyhook-io/radar/internal/ai"
 	"github.com/skyhook-io/radar/internal/config"
@@ -19,6 +22,7 @@ import (
 	"github.com/skyhook-io/radar/internal/k8s"
 	"github.com/skyhook-io/radar/internal/readscope"
 	"github.com/skyhook-io/radar/pkg/checks"
+	"github.com/skyhook-io/radar/pkg/investigation"
 	"github.com/skyhook-io/radar/pkg/resourcecontext"
 )
 
@@ -213,6 +217,7 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	for i := range agents {
 		agents[i].Apply = !s.mcpReadOnly()
 		agents[i].Verification = true
+		agents[i].Questions = true
 	}
 	// eligible: this deployment can run local BYO-agent investigations, the same
 	// gate the engine uses. It's true even when no agent is installed, so the UI
@@ -290,6 +295,41 @@ func (s *Server) aiReady(w http.ResponseWriter) (*ai.RunManager, bool) {
 	return runs, s.requireConnected(w)
 }
 
+// maxDiagnoseNamespaces bounds where a question says to start looking; past a
+// handful, "the whole cluster" is the honest scope.
+const maxDiagnoseNamespaces = 20
+
+// parseDiagnoseQuestion validates a run's opening question and where and since
+// when to start looking. Namespaces and a look-back only mean something with a
+// question. It returns a non-empty message for a 400.
+func parseDiagnoseQuestion(rawQuestion string, rawNamespaces []string, rawLookBack string) (string, []string, string, string) {
+	question := strings.TrimSpace(rawQuestion)
+	lookBack := strings.TrimSpace(rawLookBack)
+	if utf8.RuneCountInString(question) > investigation.MaxQuestionLength {
+		return "", nil, "", fmt.Sprintf("question is too long (at most %d characters)", investigation.MaxQuestionLength)
+	}
+	if question == "" && (len(rawNamespaces) > 0 || lookBack != "") {
+		return "", nil, "", "namespaces and lookBack need a question"
+	}
+	if lookBack != "" && !slices.Contains(investigation.LookBacks, lookBack) {
+		return "", nil, "", "lookBack must be one of " + strings.Join(investigation.LookBacks, ", ")
+	}
+	if len(rawNamespaces) > maxDiagnoseNamespaces {
+		return "", nil, "", fmt.Sprintf("at most %d namespaces", maxDiagnoseNamespaces)
+	}
+	var namespaces []string
+	for _, ns := range rawNamespaces {
+		ns = strings.TrimSpace(ns)
+		if errs := validation.IsDNS1123Label(ns); len(errs) > 0 {
+			return "", nil, "", "invalid namespace " + strconv.Quote(ns)
+		}
+		if !slices.Contains(namespaces, ns) {
+			namespaces = append(namespaces, ns)
+		}
+	}
+	return question, namespaces, lookBack, ""
+}
+
 // validReasoningEffort allows the empty (default) value or one of Codex's
 // reasoning-effort levels — never an arbitrary string passed into CLI config.
 func validReasoningEffort(e string) bool {
@@ -312,11 +352,14 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Kind, Namespace, Name string
-		Group                 string `json:"group"`
-		Agent                 string `json:"agent"`
-		Profile               string `json:"profile"`
-		Model                 string `json:"model"`
-		Effort                string `json:"effort"`
+		Group                 string   `json:"group"`
+		Agent                 string   `json:"agent"`
+		Profile               string   `json:"profile"`
+		Model                 string   `json:"model"`
+		Effort                string   `json:"effort"`
+		Question              string   `json:"question"`
+		Namespaces            []string `json:"namespaces"`
+		LookBack              string   `json:"lookBack"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		s.writeError(w, http.StatusBadRequest, "invalid request body")
@@ -326,21 +369,36 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(body.Name)
 	namespace := strings.TrimSpace(body.Namespace)
 	group := strings.ToLower(strings.TrimSpace(body.Group))
-	if kind == "" || name == "" {
+	question, namespaces, lookBack, msg := parseDiagnoseQuestion(body.Question, body.Namespaces, body.LookBack)
+	if msg != "" {
+		s.writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	targeted := kind != "" || name != ""
+	if targeted && (kind == "" || name == "") {
 		s.writeError(w, http.StatusBadRequest, "kind and name are required")
+		return
+	}
+	if !targeted && question == "" {
+		s.writeError(w, http.StatusBadRequest, "a resource or a question is required")
 		return
 	}
 	if len(group) > 253 {
 		s.writeError(w, http.StatusBadRequest, "API group is too long")
 		return
 	}
-	if namespace != "" {
-		if allowed := s.getUserNamespaces(r, []string{namespace}); readscope.NoNamespaceAccess(allowed) {
-			s.writeError(w, http.StatusForbidden, "no access to namespace "+namespace)
+	for _, ns := range append([]string{namespace}, namespaces...) {
+		if ns == "" {
+			continue
+		}
+		if allowed := s.getUserNamespaces(r, []string{ns}); readscope.NoNamespaceAccess(allowed) {
+			s.writeError(w, http.StatusForbidden, "no access to namespace "+ns)
 			return
 		}
 	}
-	kind, group = canonicalDiagnoseTarget(r.Context(), kind, group, namespace, name)
+	if targeted {
+		kind, group = canonicalDiagnoseTarget(r.Context(), kind, group, namespace, name)
+	}
 	requested := strings.TrimSpace(body.Agent)
 	agent := runs.AgentName(requested)
 	if agent == "" {
@@ -382,9 +440,16 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	// Authoritatively detect whether a GitOps/Helm controller owns this resource, so
 	// the Apply confirmation can warn that a direct change will be reverted — rather
 	// than relying on the agent to self-report it. Best effort: "" (unknown) on miss.
-	managedBy := s.detectManagedBy(r.Context(), kind, group, namespace, name)
-	health := s.detectDiagnoseHealth(r, kind, group, namespace, name)
-	run, err := runs.Start(kind, group, namespace, name, agent, profile, model, effort, managedBy, health)
+	spec := ai.StartSpec{
+		Kind: kind, Group: group, Namespace: namespace, Name: name,
+		Question: question, Namespaces: namespaces, LookBack: lookBack,
+		Agent: agent, Profile: profile, Model: model, Effort: effort,
+	}
+	if targeted {
+		spec.ManagedBy = s.detectManagedBy(r.Context(), kind, group, namespace, name)
+		spec.Health = s.detectDiagnoseHealth(r, kind, group, namespace, name)
+	}
+	run, err := runs.Start(spec)
 	if err != nil {
 		if errors.Is(err, ai.ErrAtCapacity) {
 			s.writeError(w, http.StatusConflict, "too many investigations running — stop or finish one first")

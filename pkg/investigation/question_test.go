@@ -1,0 +1,81 @@
+package investigation
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+var askedAt = time.Date(2026, 10, 28, 14, 5, 0, 0, time.UTC)
+
+func TestQuestionTaskPromptStartsWhereTheEngineerSaid(t *testing.T) {
+	q := Question{Text: "checkout is slow\nsince lunch", Namespaces: []string{"shop", "payments"}, LookBack: "1h", AskedAt: askedAt}
+	p := QuestionTaskPrompt(q, Options{})
+	for _, want := range []string{
+		"> checkout is slow\n> since lunch\n",
+		"They asked at 2026-10-28T14:05:00Z and said it started within the hour before that.",
+		"`get_changes` (since=1h) in namespaces shop, payments",
+		"`search` for any resource names",
+		"VERDICT BLOCK:", "PLACING A CARD:",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, "say so briefly and stop") {
+		t.Fatalf("a question run must not inherit the resource health opening:\n%s", p)
+	}
+	if p := QuestionTaskPrompt(Question{Text: "why?", AskedAt: askedAt}, Options{}); !strings.Contains(p, "`get_changes` across the cluster") {
+		t.Fatalf("no namespaces means the whole cluster:\n%s", p)
+	}
+}
+
+// A healthy resource must not end an investigation of something that
+// happened earlier, and a current unrelated issue must not replace the
+// question: the health frame is context.
+func TestTargetQuestionPromptLeadsWithTheQuestion(t *testing.T) {
+	target := Target{Kind: "Deployment", Group: "apps", Namespace: "shop", Name: "checkout"}
+	health := &HealthSignal{Health: "healthy"}
+	p := TargetQuestionPrompt(target, health, Question{Text: "why did checkout fail yesterday?", AskedAt: askedAt}, Options{})
+	if !strings.HasPrefix(p, "The engineer describes what they are seeing") {
+		t.Fatalf("the question must lead:\n%s", p)
+	}
+	for _, want := range []string{
+		"They asked about Deployment.apps shop/checkout",
+		"as context only: Radar currently reports Deployment.apps shop/checkout as healthy",
+		"Pass `group=apps`",
+		"VERDICT BLOCK:",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, p)
+		}
+	}
+	if strings.Contains(p, "say so briefly and stop") || strings.Contains(p, "Find the specific root cause and propose") {
+		t.Fatalf("the health-driven opening must not steer a question:\n%s", p)
+	}
+}
+
+func TestQuestionSystemPromptKeepsTheSharedDiscipline(t *testing.T) {
+	if !strings.Contains(QuestionSystemPrompt, ResultDiscipline+" AUDIENCE:") {
+		t.Fatal("QuestionSystemPrompt must carry ResultDiscipline verbatim")
+	}
+	if !strings.HasSuffix(QuestionSystemPrompt, " "+UntrustedClusterData) {
+		t.Fatal("QuestionSystemPrompt must end with UntrustedClusterData verbatim")
+	}
+	if !strings.Contains(QuestionSystemPrompt, "never guess a resource") {
+		t.Fatal("a vague question must narrow or end inconclusive")
+	}
+}
+
+func TestLookBackLabel(t *testing.T) {
+	for in, want := range map[string]string{"15m": "15 minutes", "1h": "hour", "6h": "6 hours", "24h": "24 hours", "": "", "1d": "", "h": "", "0h": ""} {
+		if got := lookBackLabel(in); got != want {
+			t.Errorf("lookBackLabel(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for _, lb := range LookBacks {
+		if lookBackLabel(lb) == "" {
+			t.Errorf("offered look-back %q has no label", lb)
+		}
+	}
+}

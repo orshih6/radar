@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -265,5 +267,22 @@ func TestMergeDetectedWithDrivableUsesTheActualBackendSet(t *testing.T) {
 	}
 	if len(got) != 3 || got[2].Name != "cursor-agent" || !got[2].Supported {
 		t.Fatalf("an override-only backend must still be advertised: %+v", got)
+	}
+}
+
+func TestParseDiagnoseQuestionNormalizesScope(t *testing.T) {
+	question, namespaces, lookBack, msg := parseDiagnoseQuestion("  checkout is slow \n", []string{" shop", "payments", "shop"}, "1h")
+	if msg != "" || question != "checkout is slow" || lookBack != "1h" || !slices.Equal(namespaces, []string{"shop", "payments"}) {
+		t.Fatalf("got %q %v %q %q", question, namespaces, lookBack, msg)
+	}
+	if _, _, _, msg := parseDiagnoseQuestion("", nil, ""); msg != "" {
+		t.Fatalf("a resource-only run has no question to validate: %q", msg)
+	}
+	many := make([]string, maxDiagnoseNamespaces+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("ns-%d", i)
+	}
+	if _, _, _, msg := parseDiagnoseQuestion("why?", many, ""); msg == "" {
+		t.Fatal("more namespaces than the cap must be refused")
 	}
 }
