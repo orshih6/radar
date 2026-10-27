@@ -13,7 +13,7 @@ function OwnedWorkload({ root, reference, onNavigate, active }: { root: any; ref
   const workload = query.data
   const owned = root.metadata.uid && workload?.metadata?.namespace === root.metadata.namespace && workload.metadata.ownerReferences?.some((owner: any) => owner.controller === true && apiVersionToGroup(owner.apiVersion) === 'opentelemetry.io' && owner.kind === 'OpenTelemetryCollector' && owner.name === root.metadata.name && owner.uid === root.metadata.uid)
   const status = owned ? getWorkloadStatus(workload, kind) : undefined
-  return <Property label={<ResourceLink {...reference} label={`${reference.kind} / ${reference.name}`} onNavigate={onNavigate} />} value={query.error ? 'Could not read workload; open it for details.' : !workload ? 'Reading current status…' : !owned ? 'Ownership changed; status not attributed to this Collector.' : <Badge severity={healthToSeverity(status!.level)}>{status!.text}</Badge>} />
+  return <Property label={<ResourceLink {...reference} label={`${reference.kind} / ${reference.name}`} onNavigate={onNavigate} />} value={query.error ? 'Could not read workload; open it for details.' : !workload ? 'Reading current status…' : !owned ? 'Not currently controlled by this Collector; status not attributed.' : <Badge severity={healthToSeverity(status!.level)}>{status!.text}</Badge>} />
 }
 
 export function OpenTelemetryCollectorRenderer({ data, onNavigate, active = true }: { data: any; onNavigate?: (ref: ResourceRef) => void; active?: boolean }) {

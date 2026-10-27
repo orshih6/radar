@@ -16,7 +16,7 @@ it('separates current scaled-to-zero workload state from operator readiness', ()
   expect(html).toContain('Current Workloads')
   expect(html).toContain('Deployment / runtime')
   expect(html).toContain('Scaled to 0')
-  expect(html).not.toContain('Ownership changed')
+  expect(html).not.toContain('Not currently controlled')
 })
 
 it('does not attribute a replaced workload to the current Collector', () => {
@@ -24,7 +24,7 @@ it('does not attribute a replaced workload to the current Collector', () => {
   replaced.metadata.ownerReferences[0].uid = 'old-root'
   read.mockImplementation((kind: string) => kind === 'opentelemetrycollectors' ? { relationships: { children: [reference], ownership: { children: { complete: true } } } } : { data: replaced })
   const html = renderToStaticMarkup(<OpenTelemetryCollectorRenderer data={root} />)
-  expect(html).toContain('Ownership changed')
+  expect(html).toContain('Not currently controlled')
   expect(html).not.toContain('Scaled to 0')
 })
 

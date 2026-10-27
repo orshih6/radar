@@ -43,7 +43,8 @@ func operatorChildrenFromSource(source ownership.Source, fetched ownership.Obser
 		out.Unavailable = string(readreason.ClusterConnecting)
 		return out
 	}
-	v := ownership.NewView(session, access(session.Catalog()))
+	callerAccess := access(session.Catalog())
+	v := ownership.NewView(session, callerAccess)
 	v.Seed(fetched)
 	a := v.Children(fetched.Ref)
 	if !a.Subject.Present() || a.Subject.Read.Object.UID != fetched.UID {
@@ -51,6 +52,9 @@ func operatorChildrenFromSource(source ownership.Source, fetched ownership.Obser
 		return out
 	}
 	for _, kind := range []string{"Deployment", "StatefulSet", "DaemonSet"} {
+		if callerAccess.CanRead(resourceid.GroupKind{Group: "apps", Kind: kind}, fetched.Ref.Namespace) != ownership.Allowed {
+			out.WorkloadsComplete = false
+		}
 		served, known := session.Catalog().Kind(resourceid.GroupKind{Group: "apps", Kind: kind})
 		if !known || !served.HasGCVerbs {
 			out.WorkloadsComplete = false
