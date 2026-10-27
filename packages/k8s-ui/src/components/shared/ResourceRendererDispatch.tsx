@@ -321,6 +321,7 @@ import type { ScalerDiagnosis } from '../resources/renderers/WorkloadRenderer'
  * When an override is not provided, the base (shared) renderer is used.
  */
 export interface RendererOverrides {
+  OpenTelemetryCollectorRenderer?: React.ComponentType<{ data: any; onNavigate?: (ref: ResourceRef) => void }>
   FluxHelmReleaseRenderer?: React.ComponentType<React.ComponentProps<typeof FluxHelmReleaseRenderer>>
   JobRenderer?: React.ComponentType<{ data: any; onNavigate?: (ref: ResourceRef) => void }>
   JobSetRenderer?: React.ComponentType<{ data: any; onNavigate?: (ref: ResourceRef) => void }>
@@ -785,6 +786,7 @@ export function ResourceRendererDispatch({
   const JobSetComp = rendererOverrides?.JobSetRenderer ?? JobSetRenderer
   const RayJobComp = rendererOverrides?.RayJobRenderer ?? RayJobRenderer
   const RayClusterComp = rendererOverrides?.RayClusterRenderer ?? RayClusterRenderer
+  const CollectorComp = rendererOverrides?.OpenTelemetryCollectorRenderer ?? OpenTelemetryCollectorRenderer
   const RayServiceComp = rendererOverrides?.RayServiceRenderer ?? RayServiceRenderer
   const KueueWorkloadComp = rendererOverrides?.KueueWorkloadRenderer ?? KueueWorkloadRenderer
   const PodComp = rendererOverrides?.PodRenderer ?? PodRenderer
@@ -1063,7 +1065,7 @@ export function ResourceRendererDispatch({
         {isCrossplaneMR && <ManagedResourceRenderer data={data} onNavigate={onNavigate} />}
         {(isCrossplaneXR || isCrossplaneClaim) && <CompositeComp data={data} onNavigate={onNavigate} />}
 
-        {kind === 'opentelemetrycollectors' && isApiGroup(data?.apiVersion, 'opentelemetry.io') && <OpenTelemetryCollectorRenderer data={data} />}
+        {kind === 'opentelemetrycollectors' && isApiGroup(data?.apiVersion, 'opentelemetry.io') && <CollectorComp data={data} onNavigate={onNavigate} />}
         {kind === 'instrumentations' && isApiGroup(data?.apiVersion, 'opentelemetry.io') && <OpenTelemetryInstrumentationRenderer data={data} />}
         {kind === 'canaries' && isApiGroup(data?.apiVersion, 'flagger.app') && <FlaggerCanaryRenderer data={data} onNavigate={onNavigate} />}
         {kind === 'metrictemplates' && isApiGroup(data?.apiVersion, 'flagger.app') && <FlaggerMetricTemplateRenderer data={data} onNavigate={onNavigate} />}

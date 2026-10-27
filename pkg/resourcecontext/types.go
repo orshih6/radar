@@ -37,6 +37,9 @@ type ResourceContext struct {
 	Reflection *ReflectionContext `json:"reflection,omitempty"`
 	Tier       ContextTier        `json:"tier"`
 	Owner      *ContextRef        `json:"owner,omitempty"`
+	// Children names current direct children supplied by the host,
+	// resolved by owner-reference UID, never labels or generated names.
+	Children *ChildrenContext `json:"children,omitempty"`
 	// ManagedBy names the highest readable controller and separately observed
 	// non-GitOps managing controllers. Manager carries GitOps/Helm evidence.
 	// An incomplete controller walk is reported in Omitted.
@@ -911,4 +914,15 @@ type ReflectionContext struct {
 	Automatic             *bool        `json:"automatic,omitempty"`
 	VisibleMirrors        []ContextRef `json:"visibleMirrors,omitempty"`
 	Truncated             bool         `json:"truncated,omitempty"`
+}
+
+// ChildrenContext is a bounded direct-child inventory. Complete covers only
+// the caller-readable scope; Narrowed means that scope may exclude children.
+// An omitted block does not establish that no runtime exists. Items can include
+// non-workloads (for example a TargetAllocator CR); follow them independently.
+type ChildrenContext struct {
+	Items     []ContextRef `json:"items"`
+	Complete  bool         `json:"complete"`
+	Narrowed  bool         `json:"narrowed,omitempty"`
+	Truncated bool         `json:"truncated,omitempty"`
 }

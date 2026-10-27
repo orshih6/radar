@@ -27,6 +27,7 @@ import (
 	aicontext "github.com/skyhook-io/radar/pkg/ai/context"
 	"github.com/skyhook-io/radar/pkg/issuesapi"
 	"github.com/skyhook-io/radar/pkg/k8score"
+	"github.com/skyhook-io/radar/pkg/ownership"
 	"github.com/skyhook-io/radar/pkg/probe"
 	"github.com/skyhook-io/radar/pkg/resourcecontext"
 	"github.com/skyhook-io/radar/pkg/resourceid"
@@ -36,7 +37,7 @@ import (
 // endpoints. Workloads resolve to a pod set for log fan-out; GitOps reconcilers
 // take a no-pods status path.
 type diagnoseCommonInput struct {
-	Kind      string `json:"kind" jsonschema:"kind to diagnose: a workload (pod, deployment, statefulset, daemonset, Argo Rollout) for logs+events+startup blockers, a GitOps reconciler (application, kustomization, Flux HelmRelease) for sync/health summary + parsed failure cause, or a network entry kind (service, ingress, httproute, grpcroute, gateway) for a path-shaped trace of which hop drops traffic"`
+	Kind      string `json:"kind" jsonschema:"kind to diagnose: a workload (pod, deployment, statefulset, daemonset, Argo Rollout) for logs+events+startup blockers, an OpenTelemetryCollector for reconciliation plus owned-workload bundles, a GitOps reconciler (application, kustomization, Flux HelmRelease) for sync/health summary + parsed failure cause, or a network entry kind (service, ingress, httproute, grpcroute, gateway) for a path-shaped trace of which hop drops traffic"`
 	Group     string `json:"group,omitempty" jsonschema:"target API group; set for CRDs or kind collisions (argoproj.io for Rollout); built-ins are inferred"`
 	Probe     bool   `json:"probe,omitempty" jsonschema:"active reachability test for network entry kinds: when true, augment the static trace with DNS/TCP/TLS/HTTP probes as applicable. Explicitly non-HTTP Service ports stop at TCP; Radar does not send them an unrelated HTTP request. Uses direct TCP when radar is in-cluster, K8s API server proxy from a laptop - the same call works either way. Probes can escalate the static verdict when failures are unanimous on a hop, but never soften broken or unknown. Probe failures attributable to the vantage (e.g. NetworkPolicy blocking radar's path) can produce false-positive escalations; the per-hop chip carries the granular signal. Costs 0-3s wall time. No effect for non-network kinds."`
 	Namespace string `json:"namespace" jsonschema:"resource namespace"`
@@ -283,47 +284,67 @@ func handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, input diagnoseI
 		input.Group = expectedGroup
 		return handleNetworkTraceDiagnose(ctx, input, traceKind)
 	}
+	if canonicalKind, group, resource, ok := operatorDiagnoseTarget(input.Kind); ok {
+		if input.Group != "" && input.Group != group {
+			return nil, nil, fmt.Errorf("invalid group %q for %s: expected %q", input.Group, input.Kind, group)
+		}
+		input.Group = group
+		return handleOperatorDiagnose(ctx, input, canonicalKind, resource)
+	}
+	resp, err := diagnoseWorkload(ctx, input, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	return toJSONResult(resp)
+}
+
+// diagnoseWorkload is also the bounded bundle for an operator's observed child.
+// expectedOwner refuses a child replaced or reparented after ownership lookup.
+func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *ownership.Observation) (*diagnoseResponse, error) {
 	kindNorm := normalizeDiagnoseKind(input.Kind)
 	if kindNorm == "" {
-		return nil, nil, fmt.Errorf("invalid kind %q: must be pod, deployment, statefulset, daemonset, Argo Rollout, application, kustomization, Flux HelmRelease, or a network entry kind (service, ingress, httproute, grpcroute, gateway)", input.Kind)
+		return nil, fmt.Errorf("invalid kind %q: must be pod, deployment, statefulset, daemonset, Argo Rollout, application, kustomization, Flux HelmRelease, or a network entry kind (service, ingress, httproute, grpcroute, gateway)", input.Kind)
 	}
 	expectedGroup := workloadDiagnoseGroup(kindNorm)
 	if input.Group != "" && !strings.EqualFold(input.Group, expectedGroup) {
-		return nil, nil, fmt.Errorf("invalid group %q for %s: expected %q", input.Group, input.Kind, expectedGroup)
+		return nil, fmt.Errorf("invalid group %q for %s: expected %q", input.Group, input.Kind, expectedGroup)
 	}
 	input.Group = expectedGroup
 
 	if !checkNamespaceAccess(ctx, input.Namespace) {
-		return nil, nil, fmt.Errorf("forbidden: no access to namespace %q", input.Namespace)
+		return nil, fmt.Errorf("forbidden: no access to namespace %q", input.Namespace)
 	}
 
 	cache := k8s.GetResourceCache()
 	if cache == nil {
-		return nil, nil, errNotConnected()
+		return nil, errNotConnected()
 	}
 	cache, _, err := planResourceInventory(ctx, kindNorm, input.Group, []string{input.Namespace}, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	var obj runtime.Object
 	if input.Group != "" && !k8s.TypedKindOwnsGroup(kindNorm, input.Group) {
 		u, err := fetchMCPDynamicResource(ctx, cache, kindNorm, input.Group, input.Namespace, input.Name)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		obj = u
 	} else {
 		var err error
 		obj, err = k8s.FetchResource(cache, kindNorm, input.Namespace, input.Name)
 		if err != nil {
-			return nil, nil, resourceGetError(ctx, err, kindNorm, input.Namespace, input.Name)
+			return nil, resourceGetError(ctx, err, kindNorm, input.Namespace, input.Name)
 		}
+	}
+	if expectedOwner != nil && !ownedByOperator(obj, *expectedOwner) {
+		return nil, fmt.Errorf("workload no longer has the observed operator owner; retry diagnose")
 	}
 	k8s.SetTypeMeta(obj)
 	objectMeta, err := meta.Accessor(obj)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read resource metadata: %w", err)
+		return nil, fmt.Errorf("failed to read resource metadata: %w", err)
 	}
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	canonicalGroup := gvk.Group
@@ -333,14 +354,14 @@ func handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, input diagnoseI
 	}
 	minified, err := aicontext.Minify(obj, aicontext.LevelDetail)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to minify: %w", err)
+		return nil, fmt.Errorf("failed to minify: %w", err)
 	}
 
 	pods, podsErr := resolveDiagnosePods(cache, kindNorm, input.Namespace, input.Name, obj)
 	podsNotListable := errors.Is(podsErr, errPodsNotListable)
 	podsCacheWarming := errors.Is(podsErr, errPodsCacheWarming)
 	if podsErr != nil && !podsNotListable && !podsCacheWarming {
-		return nil, nil, podsErr
+		return nil, podsErr
 	}
 	issueSummary, issueRows := computeMCPIssueContext(ctx, cache, canonicalGroup, canonicalKind, input.Namespace, input.Name, true)
 	resCtx := buildMCPResourceContextWithStaleChecks(
@@ -364,7 +385,7 @@ func handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, input diagnoseI
 
 	sinceSeconds, err := parseLogsSince(input.Since)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Vitals run beside the log fan-out under their own budget, gated per
@@ -533,7 +554,7 @@ func handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, input diagnoseI
 	}
 	metricsWG.Wait()
 	resp.Metrics = metrics
-	return toJSONResult(resp)
+	return &resp, nil
 }
 
 // gitopsDiagnoseTarget recognizes the GitOps reconciler kinds diagnose handles
