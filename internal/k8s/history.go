@@ -2223,12 +2223,16 @@ func diffNode(oldObj, newObj any) ([]FieldChange, []string) {
 		}
 	}
 
+	joining := nodeJoining(newNode)
 	for _, key := range changedMapKeys(oldNode.Labels, newNode.Labels) {
 		if nodeMetadataKeyIgnored(key, false) {
 			continue
 		}
 		oldVal, oldOK := oldNode.Labels[key]
 		newVal, newOK := newNode.Labels[key]
+		if joining && !oldOK && !nodePolicyMetadataKey(key) {
+			continue
+		}
 		changes = append(changes, FieldChange{
 			Path:     specPathKey("metadata.labels", key),
 			OldValue: templateLabelValue(key, oldVal, oldOK),
@@ -2242,6 +2246,9 @@ func diffNode(oldObj, newObj any) ([]FieldChange, []string) {
 		}
 		_, oldOK := oldNode.Annotations[key]
 		_, newOK := newNode.Annotations[key]
+		if joining && !oldOK && !nodePolicyMetadataKey(key) {
+			continue
+		}
 		// Like pod-template annotations, these can hold arbitrary config or
 		// credentials. Keep the field and presence without storing the value.
 		oldShown, newShown := hiddenValues(oldOK, newOK)
@@ -3267,6 +3274,29 @@ func nodeTaintDisplayValues(taints []corev1.Taint) []string {
 	return values
 }
 
+// nodeJoinWindow covers the metadata a new node collects after registering:
+// cloud-controller topology labels within a second, Karpenter instance labels
+// about 20s later, CNI annotations at boot.
+const nodeJoinWindow = 5 * time.Minute
+
+// nodeJoining reports whether keys added to this node now are most likely
+// join-time bookkeeping rather than a change someone made.
+func nodeJoining(node *corev1.Node) bool {
+	created := node.CreationTimestamp.Time
+	return !created.IsZero() && time.Since(created) < nodeJoinWindow
+}
+
+// nodePolicyMetadataKey is user-set disruption and scale-down policy, recorded
+// even on a joining node.
+func nodePolicyMetadataKey(key string) bool {
+	switch key {
+	case "karpenter.sh/do-not-disrupt", "karpenter.sh/do-not-evict", "karpenter.sh/do-not-repair",
+		"cluster-autoscaler.kubernetes.io/scale-down-disabled":
+		return true
+	}
+	return false
+}
+
 func nodeMetadataKeyIgnored(key string, annotation bool) bool {
 	if key == "node.alpha.kubernetes.io/ttl" || key == "nvidia.com/gfd.timestamp" || strings.HasPrefix(key, "rke2.io/") || strings.HasPrefix(key, "k3s.io/") {
 		return true
@@ -3278,10 +3308,13 @@ func nodeMetadataKeyIgnored(key string, annotation bool) bool {
 	case "volumes.kubernetes.io/controller-managed-attach-detach", "csi.volume.kubernetes.io/nodeid",
 		"alpha.kubernetes.io/provided-node-ip", "kubectl.kubernetes.io/last-applied-configuration", "kubevirt.io/heartbeat":
 		return true
+	// Rancher recomputes the node's pod request/limit totals every 15s.
+	case "management.cattle.io/pod-requests", "management.cattle.io/pod-limits":
+		return true
+	}
 	// User policy must remain visible even when the controller's runtime
 	// annotations are excluded. Karpenter labels also drive scheduling.
-	case "karpenter.sh/do-not-disrupt", "karpenter.sh/do-not-evict", "karpenter.sh/do-not-repair",
-		"cluster-autoscaler.kubernetes.io/scale-down-disabled":
+	if nodePolicyMetadataKey(key) {
 		return false
 	}
 	for _, prefix := range []string{

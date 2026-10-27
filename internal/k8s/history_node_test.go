@@ -114,6 +114,7 @@ func TestRecordToTimelineStore_NodeExcludedMetadata(t *testing.T) {
 		"rke2.io/node-config-hash", "k3s.io/node-args", "k3s.io/node-env",
 		"karpenter.sh/nodepool-hash", "karpenter.sh/registration-hash",
 		"kubectl.kubernetes.io/last-applied-configuration",
+		"management.cattle.io/pod-requests", "management.cattle.io/pod-limits",
 	} {
 		for _, op := range []string{"added", "changed", "removed"} {
 			t.Run(key+"/"+op, func(t *testing.T) {
@@ -168,6 +169,39 @@ func TestComputeDiff_NodeMixedMetadata(t *testing.T) {
 	}
 	if diff == nil || !reflect.DeepEqual(diff.Fields, want) {
 		t.Fatalf("mixed diff = %+v, want %+v", diff, want)
+	}
+}
+
+// A new node collects labels and annotations from the cloud controller,
+// Karpenter and the CNI in its first minutes. Those additions are not changes
+// anyone made; edits, removals and disruption policy still are.
+func TestComputeDiff_JoiningNodeMetadata(t *testing.T) {
+	oldNode := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+		Name: "worker", CreationTimestamp: metav1.NewTime(time.Now().Add(-20 * time.Second)),
+		Labels:      map[string]string{"node.kubernetes.io/instance-type": "m5.large", "team": "a"},
+		Annotations: map[string]string{"example.com/owner": "a"},
+	}}
+	newNode := oldNode.DeepCopy()
+	newNode.Labels["topology.kubernetes.io/zone"] = "us-east-1a"
+	newNode.Labels["karpenter.k8s.aws/instance-cpu"] = "2"
+	newNode.Labels["team"] = "b"
+	newNode.Annotations["projectcalico.org/IPv4Address"] = "10.0.0.1/24"
+	newNode.Annotations["karpenter.sh/do-not-disrupt"] = "true"
+	delete(newNode.Annotations, "example.com/owner")
+	diff := ComputeDiff("Node", oldNode, newNode)
+	want := []FieldChange{
+		{Path: "metadata.labels.team", OldValue: "a", NewValue: "b"},
+		{Path: "metadata.annotations[example.com/owner]", OldValue: hiddenSetMarker, NewValue: nil},
+		{Path: "metadata.annotations[karpenter.sh/do-not-disrupt]", OldValue: nil, NewValue: hiddenSetMarker},
+	}
+	if diff == nil || !reflect.DeepEqual(diff.Fields, want) {
+		t.Fatalf("joining diff = %+v, want %+v", diff, want)
+	}
+
+	oldNode.CreationTimestamp = metav1.NewTime(time.Now().Add(-nodeJoinWindow - time.Minute))
+	newNode.CreationTimestamp = oldNode.CreationTimestamp
+	if diff := ComputeDiff("Node", oldNode, newNode); diff == nil || len(diff.Fields) != 6 {
+		t.Fatalf("established node additions dropped: %+v", diff)
 	}
 }
 
