@@ -26,7 +26,7 @@ import type {
   YamlDocumentIdentity,
   YamlSchemaLoadResult,
 } from '@skyhook-io/k8s-ui'
-import { useQuery, useMutation, useQueryClient, skipToken, type QueryClient } from '@tanstack/react-query'
+import { focusManager, useQuery, useMutation, useQueryClient, skipToken, type QueryClient } from '@tanstack/react-query'
 import { showApiError, showApiSuccess, showApiNotice } from '../components/ui/Toast'
 import { useIsAuthEnabled, useNamespacedCapabilities } from '../contexts/CapabilitiesContext'
 import type {
@@ -834,6 +834,7 @@ export function useResourceIssues(
   namespace: string,
   name: string,
   enabled = true,
+  observation?: string,
 ) {
   const clusterScoped = !namespace;
   const pathNs = clusterScoped ? "_" : encodeURIComponent(namespace);
@@ -844,15 +845,46 @@ export function useResourceIssues(
   // An older Radar without the endpoint settles as unsupported, so the
   // renderers fall back to their own status-derived problem banners.
   const { guard, gatedKey } = useRadarFeature("resourceIssues");
-  return useQuery<Issue[]>({
-    queryKey: ["issues", "resource", kind, group ?? "", namespace, name, ...gatedKey],
+  const queryClient = useQueryClient();
+  const queryKey = ["issues", "resource", kind, group ?? "", namespace, name, ...gatedKey];
+  const query = useQuery<Issue[]>({
+    queryKey,
     queryFn: () => guard(() => fetchJSON<Issue[]>(`${path}${qs ? `?${qs}` : ""}`)),
     retry: shouldRetryRadarQuery,
-    // No refetchInterval: a drawer doesn't need to poll; staleTime keeps it fresh
-    // on reopen without re-running an uncapped Compose every 30s.
     staleTime: 30000,
+    // Time-based detections can change without a resource watch update.
+    refetchInterval: (q) => clusterScoped || q.state.error instanceof RadarFeatureUnsupportedError ? false : 60000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     enabled: enabled && !!kind && !!name,
   });
+  const identity = JSON.stringify(queryKey);
+  const previous = useRef<{ identity: string; observation: string | undefined; refreshedAt: number } | null>(null);
+  useEffect(() => {
+    const prior = previous.current;
+    if (prior?.identity !== identity) {
+      previous.current = { identity, observation, refreshedAt: Date.now() };
+      return;
+    }
+    if (prior.observation === undefined) {
+      prior.observation = observation;
+      return;
+    }
+    if (clusterScoped || !enabled || !kind || !name || query.error instanceof RadarFeatureUnsupportedError ||
+      observation === undefined || prior.observation === observation) return;
+
+    // Keep the observation out of the query key, and bound Compose requests even
+    // when a busy workload's resource version changes continuously.
+    const delay = Math.max(0, 10000 - (Date.now() - Math.max(prior.refreshedAt, query.dataUpdatedAt)));
+    const timer = window.setTimeout(() => {
+      prior.observation = observation;
+      prior.refreshedAt = Date.now();
+      void queryClient.invalidateQueries({ queryKey, exact: true,
+        refetchType: focusManager.isFocused() ? 'active' : 'none' });
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [identity, observation, enabled, kind, name, clusterScoped, queryClient, query.error, query.dataUpdatedAt]);
+  return query;
 }
 
 // The Issues page narrowed to one subject: the same per-resource lookup with
