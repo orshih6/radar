@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { clsx } from 'clsx'
-import { Rocket, X } from 'lucide-react'
+import { Heart, Rocket, X } from 'lucide-react'
 import { useCapabilities, useVersionCheck } from '../../api/client'
 import type { UsageDataStatus } from '../../api/usage-data'
 import { updateNoticeVisible } from '../usage-data/UsageDataPrompt'
@@ -8,6 +8,7 @@ import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 
 export const LAUNCH_URL = 'https://www.producthunt.com/products/radar-7?launch=radar-101'
+const FEATURE_URL = 'https://radarhq.io/product/ai-investigations'
 const DISMISSED_KEY = 'radar-product-hunt-2026-10-dismissed'
 const SHOW_DELAY_MS = 10_000
 
@@ -108,30 +109,37 @@ export function ProductHuntNotice({ usageData }: { usageData: UsageDataStatus | 
           <Rocket className="w-4 h-4" aria-hidden />
         </span>
         <div className="min-w-0">
-          {phase === 'live' ? (
-            <>
-              <p className="text-sm font-medium text-theme-text-primary">Radar is on Product Hunt today</p>
-              <p className="text-xs text-theme-text-secondary mt-1">
-                We launched MCP and AI investigations. If Radar has been useful, we'd love to hear what it found for you, or what you'd want next.
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm font-medium text-theme-text-primary">Radar launches on Product Hunt Oct 29</p>
-              <p className="text-xs text-theme-text-secondary mt-1">
-                We're launching MCP and AI investigations. Follow Radar there to hear when it's live.
-              </p>
-            </>
-          )}
-          <a
-            href={LAUNCH_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={dismiss}
-            className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-accent-text hover:underline"
-          >
-            {phase === 'live' ? 'See the launch →' : 'Open on Product Hunt →'}
-          </a>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-theme-text-primary">
+            Radar <Heart className="w-3.5 h-3.5 fill-current text-red-500 dark:text-red-400" aria-label="loves" /> Agents
+          </p>
+          <p className="text-xs font-medium text-accent-text mt-0.5">
+            {phase === 'live' ? 'Live on Product Hunt today' : 'Launching on Product Hunt Oct 29'}
+          </p>
+          <p className="text-xs text-theme-text-secondary mt-1.5">
+            {phase === 'live'
+              ? "We're on Product Hunt today to showcase Radar's MCP server and AI investigations. Built with this community's feedback, so it's yours too: come say hi."
+              : "We're launching on Product Hunt to showcase Radar's MCP server and AI investigations. Built with this community's feedback, so it's yours too."}
+            {' '}Haven't tried them yet? We put a ton of work into making your agents feel as at home in Radar as you do.
+          </p>
+          <div className="flex items-center gap-3 mt-2">
+            <a
+              href={LAUNCH_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={dismiss}
+              className="text-xs font-semibold text-accent-text hover:underline"
+            >
+              {phase === 'live' ? 'See the launch →' : 'Follow on Product Hunt →'}
+            </a>
+            <a
+              href={FEATURE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-theme-text-tertiary hover:text-theme-text-secondary hover:underline"
+            >
+              How it works
+            </a>
+          </div>
         </div>
       </div>
     </div>
