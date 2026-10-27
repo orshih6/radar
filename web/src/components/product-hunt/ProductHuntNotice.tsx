@@ -6,30 +6,11 @@ import type { UsageDataStatus } from '../../api/usage-data'
 import { updateNoticeVisible } from '../usage-data/UsageDataPrompt'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
+import { isPhaseDismissed, launchPhase, markPhaseDismissed, type LaunchPhase } from './launchWindow'
 
 export const LAUNCH_URL = 'https://www.producthunt.com/products/radar-7?launch=radar-101'
 const FEATURE_URL = 'https://radarhq.io/product/ai-investigations'
-const DISMISSED_KEY = 'radar-product-hunt-2026-10-dismissed'
 const SHOW_DELAY_MS = 10_000
-
-// Product Hunt's day runs midnight to midnight Pacific; PDT is UTC-7 until Nov 1.
-const LAUNCH_START = Date.parse('2026-10-29T07:00:00Z')
-const LAUNCH_END = Date.parse('2026-10-30T07:00:00Z')
-
-export type LaunchPhase = 'upcoming' | 'live'
-
-export function launchPhase(now: number): LaunchPhase | null {
-  if (now >= LAUNCH_END) return null
-  return now >= LAUNCH_START ? 'live' : 'upcoming'
-}
-
-function isDismissed(): boolean {
-  try {
-    return localStorage.getItem(DISMISSED_KEY) !== null
-  } catch {
-    return false
-  }
-}
 
 export function shouldShowLaunchNotice(opts: {
   phase: LaunchPhase | null
@@ -41,15 +22,17 @@ export function shouldShowLaunchNotice(opts: {
   return opts.phase !== null && opts.deploymentMode === 'local' && !opts.dismissed && opts.ready && !opts.cornerBusy
 }
 
-// A one-off, local-only notice for the October 2026 Product Hunt launch. It
-// waits its turn in the corner behind the update notice and the first-run
-// usage prompt, and a dismissal is final for both phases.
+// A one-off, local-only notice for the October 2026 Product Hunt launch.
+// Before the day it waits its turn behind the update notice and the first-run
+// usage prompt; on the day they wait for it. Each phase is dismissed on its
+// own, so the launch-day card still shows to someone who closed the one before.
 export function ProductHuntNotice({ usageData }: { usageData: UsageDataStatus | undefined }) {
   const { data: capabilities } = useCapabilities()
   const { data: versionInfo } = useVersionCheck()
   const [now, setNow] = useState(() => Date.now())
   const [ready, setReady] = useState(false)
-  const [dismissed, setDismissed] = useState(isDismissed)
+  // Covers a dismissal when localStorage is unavailable.
+  const [dismissedHere, setDismissedHere] = useState<LaunchPhase[]>([])
 
   useEffect(() => {
     if (launchPhase(Date.now()) === null) return
@@ -67,20 +50,17 @@ export function ProductHuntNotice({ usageData }: { usageData: UsageDataStatus | 
   const show = shouldShowLaunchNotice({
     phase,
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
-    dismissed,
+    dismissed: phase !== null && (dismissedHere.includes(phase) || isPhaseDismissed(phase)),
     ready,
-    cornerBusy: updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || !!usageData?.firstRunPrompt,
+    cornerBusy: phase === 'upcoming' && (updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || !!usageData?.firstRunPrompt),
   })
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
   if (!shouldRender) return null
 
   const dismiss = () => {
-    try {
-      localStorage.setItem(DISMISSED_KEY, '1')
-    } catch {
-      // localStorage unavailable: dismiss for this session only
-    }
-    setDismissed(true)
+    if (phase === null) return
+    markPhaseDismissed(phase)
+    setDismissedHere((d) => [...d, phase])
   }
 
   return (

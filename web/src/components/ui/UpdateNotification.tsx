@@ -16,6 +16,7 @@ import { WithTooltip } from './Tooltip'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { IN_CLUSTER_UPGRADE_URL } from '../../utils/version'
+import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner } from '../product-hunt/launchWindow'
 
 const DISMISSED_KEY = 'radar-update-dismissed'
 
@@ -44,6 +45,7 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
   const [dismissed, setDismissed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
+  const [launchHoldsCorner, setLaunchHoldsCorner] = useState(() => launchNoticeHoldsCorner(Date.now()))
 
   // Desktop update state
   const [desktopUpdating, setDesktopUpdating] = useState(false)
@@ -93,6 +95,17 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
       window.removeEventListener('radar:update-check-result', resultHandler)
     }
   }, [queryClient, inSettings, showToast])
+
+  useEffect(() => {
+    if (inSettings || !launchHoldsCorner) return
+    const recheck = () => setLaunchHoldsCorner(launchNoticeHoldsCorner(Date.now()))
+    window.addEventListener(LAUNCH_NOTICE_DISMISSED_EVENT, recheck)
+    const poll = window.setInterval(recheck, 60_000)
+    return () => {
+      window.removeEventListener(LAUNCH_NOTICE_DISMISSED_EVENT, recheck)
+      window.clearInterval(poll)
+    }
+  }, [inSettings, launchHoldsCorner])
 
   // Log version check errors for debugging
   useEffect(() => {
@@ -149,7 +162,7 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
   // Shared in-cluster viewers get a persistent Home notice instead of a
   // floating action prompt they may not be able to act on.
   const available = !!versionInfo?.updateAvailable && deploymentMode !== undefined && deploymentMode !== 'cloud'
-  const show = available && deploymentMode !== 'in-cluster' && (inSettings ? expanded : !dismissed)
+  const show = available && deploymentMode !== 'in-cluster' && (inSettings ? expanded : !dismissed && !launchHoldsCorner)
   // Presence outlives `show` by the menu exit so a dismiss fades the chip out
   // instead of snapping it away; the enter runs the same transition in reverse.
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
