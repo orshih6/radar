@@ -200,7 +200,7 @@ it.each([
   await renderView(path)
   await click(button('Open sync'))
   expect(document.body.textContent).not.toContain('Revision (optional)')
-  expect(document.body.textContent).toContain("Syncs each source's last compared revision.")
+  expect(document.body.textContent).toContain("Syncs each source's last compared revision when the source settings still match.")
   await click(button('Sync now'))
   expect(requests).toHaveLength(1)
   expect(requests[0].body).not.toHaveProperty('revision')
@@ -213,7 +213,7 @@ it.each([
   app.status.sync.revision = 'abcdef0123456789abcdef0123456789abcdef01'
   await renderView(path)
   await click(button('Open sync'))
-  expect(document.body.textContent).toContain('Leave empty to sync the last compared revision (abcdef0)')
+  expect(document.body.textContent).toContain('Leave empty to sync the last compared revision (abcdef0) when its source settings still match.')
   await click(button('Sync now'))
   expect(requests[0].body).not.toHaveProperty('revision')
 })

@@ -172,7 +172,7 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, comparedRevisio
                   Syncs only the selected resources, without hooks. Dependencies outside the selection are not synced. Application namespace creation options still apply.
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed text-theme-text-secondary">
-                  Syncs the last compared revision{!multiSource && comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''}.
+                  Syncs the last compared revision{!multiSource && comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''} when its source settings still match.
                 </p>
                 {richResourceValidation && (
                   <p className="mt-1 text-[11px] leading-relaxed text-theme-text-secondary">
@@ -199,7 +199,7 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, comparedRevisio
               className="mt-1 w-full rounded-md border border-theme-border bg-theme-base px-2 py-1.5 font-mono text-xs text-theme-text-primary outline-none placeholder:text-theme-text-tertiary focus:border-sky-500"
             />
             <span className="mt-0.5 block text-[11px] text-theme-text-tertiary">
-              Branch, tag, or commit SHA. Leave empty to sync the last compared revision{comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''}.
+              Branch, tag, or commit SHA. Leave empty to sync the last compared revision{comparedRevisionLabel ? ` (${comparedRevisionLabel})` : ''} when its source settings still match.
             </span>
             {autoSyncEnabled && <span className="mt-0.5 block text-[11px] text-theme-text-tertiary">
               Auto-sync is enabled. Disable auto-sync to deploy another revision; dry runs can preview one.
@@ -207,7 +207,7 @@ export function SyncOptionsDialog({ open, appLabel, multiSource, comparedRevisio
           </label>
         )}
         {!resource && multiSource && (
-          <p className="text-xs text-theme-text-tertiary">Syncs each source's last compared revision.</p>
+          <p className="text-xs text-theme-text-tertiary">Syncs each source's last compared revision when the source settings still match.</p>
         )}
 
         {/* Common (Prune / Dry run) sit above a divider; Advanced toggles

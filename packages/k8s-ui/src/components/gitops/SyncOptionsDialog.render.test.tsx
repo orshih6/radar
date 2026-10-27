@@ -59,7 +59,7 @@ it('starts with prune off and submits nothing for the options, so the Applicatio
 it('hides the revision for multi-source Applications and explains comparison pinning', async () => {
   await render({ multiSource: true })
   expect(document.body.textContent).not.toContain('Revision (optional)')
-  expect(document.body.textContent).toContain("Syncs each source's last compared revision.")
+  expect(document.body.textContent).toContain("Syncs each source's last compared revision when the source settings still match.")
   await click(button('Sync now'))
   expect(confirmed[0].revision).toBeUndefined()
 })
@@ -79,7 +79,7 @@ it('omits an entered revision if the Application becomes multi-source while open
 it('explains selective sync hooks, dependencies and namespace management without denying wave ordering', async () => {
   await render({ resource: { kind: 'Deployment', group: 'apps', namespace: 'guestbook', name: 'web' } })
   expect(document.body.textContent).toContain('Syncs only the selected resources, without hooks. Dependencies outside the selection are not synced. Application namespace creation options still apply.')
-  expect(document.body.textContent).toContain('Syncs the last compared revision.')
+  expect(document.body.textContent).toContain('Syncs the last compared revision when its source settings still match.')
   expect(document.body.textContent).not.toContain('Only this resource will be applied')
   expect(document.body.textContent).not.toContain('bypasses hooks and normal sync-wave ordering')
 })
@@ -296,7 +296,7 @@ it.each([
   { comparedRevision: undefined, label: '' },
 ])('explains empty revision pinning with comparison $comparedRevision', async ({ comparedRevision, label }) => {
   await render({ comparedRevision })
-  expect(document.body.textContent).toContain(`Leave empty to sync the last compared revision${label}.`)
+  expect(document.body.textContent).toContain(`Leave empty to sync the last compared revision${label} when its source settings still match.`)
   await click(button('Sync now'))
   expect(confirmed[0].revision).toBeUndefined()
 })
@@ -307,7 +307,7 @@ it('distinguishes a selective validation target from its compared sync target', 
     comparedRevision: 'abcdef0123456789abcdef0123456789abcdef01',
     onValidate: (opts) => validated.push(opts),
   })
-  expect(document.body.textContent).toContain('Syncs the last compared revision (abcdef0)')
+  expect(document.body.textContent).toContain('Syncs the last compared revision (abcdef0) when its source settings still match.')
   expect(document.body.textContent).toContain('The dry run checks the latest revision, which can differ from the one synced.')
   await click(button('Dry-run'))
   await click(button('Sync resource'))

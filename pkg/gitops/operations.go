@@ -294,22 +294,29 @@ type ArgoSyncResource struct {
 }
 
 // ArgoSyncOptions controls an ArgoCD sync operation. Pointer-bool fields
-// let callers say "not set" via nil; DryRun/Force/ApplyOnly are only
-// written when non-nil. Prune is always written and is false unless set, as
-// in Argo CD's UI and CLI.
+// let callers say "not set" via nil and retain input presence for validation.
+// DryRun is written when non-nil, including false. For Force and ApplyOnly,
+// nil and false both leave ordinary hook behavior; only true enables force
+// or selects the apply strategy, respectively.
+// Prune is always written and is false unless set, as in Argo CD's UI and CLI.
 //
 // SyncOptions follows argocd-server: nil uses the Application's own
 // spec.syncPolicy.syncOptions, while a non-nil list, even an empty one,
 // replaces them for this sync. A JSON body that omits syncOptions (or sends
 // null) decodes to nil; one that sends [] decodes to an empty list.
 type ArgoSyncOptions struct {
-	Resources   []ArgoSyncResource `json:"resources,omitempty"`
-	Revision    string             `json:"revision,omitempty"`
-	Prune       *bool              `json:"prune,omitempty"`
-	DryRun      *bool              `json:"dryRun,omitempty"`
-	Force       *bool              `json:"force,omitempty"`
-	ApplyOnly   *bool              `json:"applyOnly,omitempty"`
-	SyncOptions []string           `json:"syncOptions"`
+	Resources []ArgoSyncResource `json:"resources,omitempty"`
+	Revision  string             `json:"revision,omitempty"`
+	Prune     *bool              `json:"prune,omitempty"`
+	// DryRun is omitted when nil; false is written explicitly.
+	DryRun *bool `json:"dryRun,omitempty"`
+	// Force enables force only when true, using hooks unless ApplyOnly is true.
+	// Nil and false do not enable force.
+	Force *bool `json:"force,omitempty"`
+	// ApplyOnly selects the apply strategy (without hooks) only when true.
+	// Nil and false keep hooks, with force only when Force is true.
+	ApplyOnly   *bool    `json:"applyOnly,omitempty"`
+	SyncOptions []string `json:"syncOptions"`
 }
 
 type ArgoResourceValidationResult struct {
