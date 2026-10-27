@@ -160,12 +160,14 @@ func diagnoseMetricsResult(t *testing.T, ctx context.Context, input diagnoseInpu
 	return got, &m
 }
 
-func grantDiagnoseDeploymentRead(t *testing.T, username string) {
+func grantDiagnoseRead(t *testing.T, username string) {
 	t.Helper()
 	perms := getPermCache().Get(username, nil)
 	perms.SetCanI("get", "apps", "deployments", "alpha", true)
 	perms.SetCanI("list", "", "pods", "alpha", true)
 	perms.SetCanI("list", "", "events", "alpha", true)
+	perms.SetCanI("get", "", "pods", "alpha", true)
+	perms.SetCanI("get", "argoproj.io", "rollouts", "alpha", true)
 	perms.SetCanI("list", "apps", "deployments", "alpha", true)
 	perms.SetCanI("list", "", "configmaps", "alpha", true)
 }
@@ -177,7 +179,7 @@ func TestHandleDiagnoseMetricsCapturesThreeSeriesOverExactPodSet(t *testing.T) {
 	f := setupFakeProm(t)
 	f.rangeBodyFunc = metricsMatrixForRequestAt(metricsVaryingValue("-0.0000345678912345678"))
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -307,7 +309,7 @@ func TestHandleDiagnoseMetricsCapsPodSetByName(t *testing.T) {
 	f := setupFakeProm(t)
 	f.rangeBodyFunc = metricsMatrixForRequestAt(metricsVaryingValue("123456789.123"))
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "fleet"))
 	if m == nil {
@@ -357,7 +359,7 @@ func TestHandleDiagnoseMetricsOmittedWhenPrometheusAbsent(t *testing.T) {
 		prometheus.Initialize(nil, nil, "")
 	})
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m != nil {
@@ -379,7 +381,7 @@ func TestHandleDiagnoseMetricsReportsUnreachablePrometheus(t *testing.T) {
 		prometheus.Initialize(nil, nil, "")
 	})
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -399,7 +401,7 @@ func TestHandleDiagnoseMetricsOmittedWhenWorkloadReadDenied(t *testing.T) {
 	t.Cleanup(timeline.ResetStore)
 	f := setupFakeProm(t)
 	ctx := withClusterAdmin(t, "scoped")
-	grantDiagnoseDeploymentRead(t, "scoped")
+	grantDiagnoseRead(t, "scoped")
 	getPermCache().Get("scoped", nil).SetCanI("get", "apps", "deployments", "alpha", false)
 
 	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "alpha", "cart"))
@@ -421,7 +423,7 @@ func TestHandleDiagnoseMetricsDropsSeriesOnTimeBudget(t *testing.T) {
 	diagnoseMetricsBudget = 200 * time.Millisecond
 	t.Cleanup(func() { diagnoseMetricsBudget = prev })
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	started := time.Now()
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
@@ -446,7 +448,7 @@ func TestHandleDiagnoseMetricsDropsSeriesOnSizeBudget(t *testing.T) {
 	f := setupFakeProm(t)
 	f.rangeBody = metricsMatrixBodyAt(600, metricsVaryingValue("123456789.123"))
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -468,7 +470,7 @@ func TestHandleDiagnoseMetricsKeepsOtherSeriesWhenOneQueryFails(t *testing.T) {
 	f.rangeStatus = 422
 	f.rangeBody = `{"status":"error","errorType":"execution","error":"boom"}`
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -496,7 +498,7 @@ func TestHandleDiagnoseMetricsKeepsOtherSeriesWhenOneCategoryFails(t *testing.T)
 		return metricsMatrixForRequest("1")(params)
 	}
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -532,7 +534,7 @@ func TestHandleDiagnoseMetricsReportsFailedContainerFilterFallback(t *testing.T)
 		}
 	}
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -682,7 +684,7 @@ func TestHandleDiagnoseMetricsCompressesFlatSeriesAndKeepsTheObservedCount(t *te
 	f := setupFakeProm(t)
 	f.rangeBodyFunc = metricsMatrixForRequest("512000")
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
 	if m == nil {
@@ -722,7 +724,7 @@ func TestDiagnoseMetricsCanBeSwitchedOff(t *testing.T) {
 	f := setupFakeProm(t)
 	f.rangeBodyFunc = metricsMatrixForRequest("512000")
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	DiagnoseMetricsEnabled = false
 	t.Cleanup(func() { DiagnoseMetricsEnabled = true })
@@ -748,7 +750,7 @@ func TestHandleDiagnoseMetricsNamesTheWorkloadsOwnPods(t *testing.T) {
 	f := setupFakeProm(t)
 	f.rangeBodyFunc = metricsMatrixForRequest("1")
 	ctx := withClusterAdmin(t, "admin")
-	grantDiagnoseDeploymentRead(t, "admin")
+	grantDiagnoseRead(t, "admin")
 
 	// The vitals cover the pods the workload controls now, named exactly.
 	got, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
