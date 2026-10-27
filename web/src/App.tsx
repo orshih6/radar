@@ -2579,7 +2579,7 @@ function AppInner({ manageDocumentTitle = false, documentTitleSuffix, onClusterL
       {!navCustomization.embedded && <UpdateNotification />}
       {!navCustomization.embedded && <WhatsNew onNavigate={navigateToPath} usageData={usageData.data} />}
       {!navCustomization.embedded && <UsageDataPrompt status={usageData.data} />}
-      {!navCustomization.embedded && <ProductHuntNotice usageData={usageData.data} />}
+      {!navCustomization.embedded && <ProductHuntNotice usageData={usageData.data} usageDataPending={usageData.isPending} />}
 
       {/* Bottom Dock for Terminal/Logs */}
       <BottomDock viewNamespaces={namespaces} />

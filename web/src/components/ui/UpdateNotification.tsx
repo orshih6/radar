@@ -16,7 +16,7 @@ import { WithTooltip } from './Tooltip'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { IN_CLUSTER_UPGRADE_URL } from '../../utils/version'
-import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner } from '../product-hunt/launchWindow'
+import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner, launchPhase } from '../product-hunt/launchWindow'
 
 const DISMISSED_KEY = 'radar-update-dismissed'
 
@@ -96,16 +96,22 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
     }
   }, [queryClient, inSettings, showToast])
 
+  // Runs until the launch window is over, so a notice already on screen when
+  // the launch day starts steps aside too.
+  const [launchWindowOpen, setLaunchWindowOpen] = useState(() => launchPhase(Date.now()) !== null)
   useEffect(() => {
-    if (inSettings || !launchHoldsCorner) return
-    const recheck = () => setLaunchHoldsCorner(launchNoticeHoldsCorner(Date.now()))
+    if (inSettings || !launchWindowOpen) return
+    const recheck = () => {
+      setLaunchHoldsCorner(launchNoticeHoldsCorner(Date.now()))
+      setLaunchWindowOpen(launchPhase(Date.now()) !== null)
+    }
     window.addEventListener(LAUNCH_NOTICE_DISMISSED_EVENT, recheck)
     const poll = window.setInterval(recheck, 60_000)
     return () => {
       window.removeEventListener(LAUNCH_NOTICE_DISMISSED_EVENT, recheck)
       window.clearInterval(poll)
     }
-  }, [inSettings, launchHoldsCorner])
+  }, [inSettings, launchWindowOpen])
 
   // Log version check errors for debugging
   useEffect(() => {

@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 import { Heart, Rocket, X } from 'lucide-react'
 import { useCapabilities, useVersionCheck } from '../../api/client'
 import type { UsageDataStatus } from '../../api/usage-data'
-import { updateNoticeVisible } from '../usage-data/UsageDataPrompt'
+import { USAGE_PROMPT_VISIBILITY_EVENT, updateNoticeVisible, usagePromptOnScreen } from '../usage-data/UsageDataPrompt'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 import { isPhaseDismissed, launchPhase, markPhaseDismissed, type LaunchPhase } from './launchWindow'
@@ -26,7 +26,7 @@ export function shouldShowLaunchNotice(opts: {
 // Before the day it waits its turn behind the update notice and the first-run
 // usage prompt; on the day they wait for it. Each phase is dismissed on its
 // own, so the launch-day card still shows to someone who closed the one before.
-export function ProductHuntNotice({ usageData }: { usageData: UsageDataStatus | undefined }) {
+export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: UsageDataStatus | undefined; usageDataPending: boolean }) {
   const { data: capabilities } = useCapabilities()
   const { data: versionInfo } = useVersionCheck()
   const [now, setNow] = useState(() => Date.now())
@@ -34,25 +34,34 @@ export function ProductHuntNotice({ usageData }: { usageData: UsageDataStatus | 
   // Covers a dismissal when localStorage is unavailable.
   const [dismissedHere, setDismissedHere] = useState<LaunchPhase[]>([])
 
+  const [usagePromptShowing, setUsagePromptShowing] = useState(usagePromptOnScreen)
+  const phase = launchPhase(now)
+  const ended = phase === null
+
   useEffect(() => {
-    if (launchPhase(Date.now()) === null) return
+    if (ended) return
     const delay = window.setTimeout(() => setReady(true), SHOW_DELAY_MS)
     // Re-reads the clock for the phase change, and the update notice's
     // dismissal, which only touches localStorage.
     const poll = window.setInterval(() => setNow(Date.now()), 60_000)
+    const onUsagePrompt = () => setUsagePromptShowing(usagePromptOnScreen())
+    window.addEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
     return () => {
       window.clearTimeout(delay)
       window.clearInterval(poll)
+      window.removeEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
     }
-  }, [])
+  }, [ended])
 
-  const phase = launchPhase(now)
   const show = shouldShowLaunchNotice({
     phase,
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
     dismissed: phase !== null && (dismissedHere.includes(phase) || isPhaseDismissed(phase)),
     ready,
-    cornerBusy: phase === 'upcoming' && (updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || !!usageData?.firstRunPrompt),
+    // A card already on screen keeps the corner, whatever the day.
+    cornerBusy: usagePromptShowing || (phase === 'upcoming' && (
+      updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || usageDataPending || !!usageData?.firstRunPrompt
+    )),
   })
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
   if (!shouldRender) return null
