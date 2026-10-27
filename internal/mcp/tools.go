@@ -59,6 +59,8 @@ import (
 // steers. Put conditional advice in response guidance so it arrives when
 // relevant; otherwise describe only fields whose names are insufficient for
 // correct interpretation, not every response field.
+const autoInstrumentationContract = "autoInstrumentation evaluates current configuration for a hypothetical NEW Pod only. Even resolved or disabled says nothing about whether an existing Pod was injected. default_ambiguous means multiple readable Instrumentation CRs assuming operator CRD mode; inline operator configuration can differ. Inspect actual Pod spec/init-container status/events for observed mutation."
+
 func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramRegistry *toolParamRegistry) {
 	boolPtr := func(b bool) *bool { return &b }
 	// Kubernetes API tools have a closed domain; optional container execution
@@ -133,7 +135,7 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 			"next, when present, is what you can do to complete it; coverage holds the same as data. Failures return {error, error_code, next?, coverage?}. " +
 			"For unknown kind/name searches, use search. For broad health triage, use " +
 			"get_dashboard or issues first. " +
-			"crossplanePause: requested=exact annotation true; acknowledged=that plus stored Synced=False/ReconcilePaused. Independent of readiness; absence allows other pauses.",
+			"crossplanePause: requested=exact annotation true; acknowledged=that plus stored Synced=False/ReconcilePaused. Independent of readiness; absence allows other pauses. " + autoInstrumentationContract,
 		Annotations: readOnly,
 	}, logToolCall("list_resources", handleListResources))
 
@@ -229,6 +231,7 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 		"or traffic not reaching a service, route or ingress. Pod, Deployment, StatefulSet, DaemonSet and Argo Rollout " +
 		"bundle resource context, selected/capped current and previous logs, Warning events, startup blockers, " +
 		"related issues and recent workload/ConfigMap changes. " +
+		autoInstrumentationContract + " " +
 		"Warning events are a capped sample for the observed resource and Pods; UID-less evidence cannot prove an incarnation. Use get_events for a broader, dedicated event read, including history. " +
 		"`crashCause` is evidence, not a root-cause verdict. `logLineSelection` ranks " +
 		"`" + crashLineFatalPattern + "`, `" + crashLineHeaderOnly + "`, `" +
