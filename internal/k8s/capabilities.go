@@ -189,6 +189,9 @@ type FeatureCapabilities struct {
 	// spec.syncPolicy.syncOptions, and an omitted prune does not prune. An
 	// older Radar syncs with no options and prunes.
 	ArgoSyncInheritance bool `json:"argoSyncInheritance"`
+	// PUT/DELETE /api/resources/{kind}/_/{name} and GET /api/audit/resource/{kind}/_/{name}
+	// read "_" as a cluster-scoped resource.
+	ClusterScopedPlaceholder bool `json:"clusterScopedPlaceholder"`
 }
 
 // WorkloadWritePermissions indicates which workload resources the user can patch.
