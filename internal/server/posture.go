@@ -2,9 +2,12 @@ package server
 
 import (
 	"net/http"
+	"os"
 
+	"github.com/skyhook-io/radar/internal/auth"
 	"github.com/skyhook-io/radar/internal/cloud"
 	"github.com/skyhook-io/radar/internal/k8s"
+	"github.com/skyhook-io/radar/internal/settings"
 )
 
 // Every decision that depends on how Radar is deployed lives here, built from
@@ -17,8 +20,9 @@ import (
 //     Radar Cloud, never to people who reach Radar without signing in.
 //   - When others can reach Radar, its configuration decides for everyone.
 //
-// Code elsewhere in this package reads the listener and the tunnel marker only
-// through here (TestPostureFactsReadOnlyHere).
+// Code elsewhere in this package calls the decisions; it doesn't read the
+// listener, the tunnel marker or the posture facts itself
+// (TestPostureFactsReadOnlyHere).
 
 type listenerExposure int
 
@@ -145,6 +149,26 @@ func (s *Server) cloudConnectDriverEnabled() bool {
 
 func (s *Server) cloudConnectNeedsSharedAck() bool {
 	return s.posture().reachableByOthers()
+}
+
+func (s *Server) configManagement() string {
+	return ConfigurationManagement(s.authConfig, s.cloudConnectCfg.CloudTunnelConfigured, s.listenAddress)
+}
+
+// ConfigurationManagement says who owns integration settings: Radar Cloud, the
+// operator (Helm values or flags), or the local user. internal/app calls it
+// before a Server exists.
+func ConfigurationManagement(authConfig auth.Config, cloudTunnel bool, listenAddress string) string {
+	p := posture{hostedCloud: cloudMode(), tunnelConfigured: cloudTunnel, auth: authConfig.Enabled(), listener: exposureOf(listenAddress)}
+	switch {
+	case p.hostedCloud || p.tunnelConfigured:
+		return "cloud"
+	// A shared Pod can use kubeconfig; a loopback CLI in a dev workspace is still local.
+	case p.auth || k8s.GetKubeconfigSummary().Mode == "in-cluster" ||
+		(os.Getenv("KUBERNETES_SERVICE_HOST") != "" && p.reachableByOthers()) || settings.OperatorConfigured():
+		return "operator"
+	}
+	return "local"
 }
 
 // aiDeploymentSupported: the engine drives an agent CLI against this server's

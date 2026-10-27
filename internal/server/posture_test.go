@@ -17,8 +17,9 @@ type postureDeployment struct {
 	authMode    string // "" or "proxy"
 	tunnel      bool   // --cloud-url
 	hostedCloud bool   // RADAR_CLOUD_MODE
-	inCluster   bool
-	operator    bool // operator settings file
+	inCluster   bool   // in-cluster ServiceAccount config
+	inPod       bool   // KUBERNETES_SERVICE_HOST, which inCluster implies
+	operator    bool   // operator settings file
 }
 
 func (d postureDeployment) server(t *testing.T) *Server {
@@ -31,6 +32,8 @@ func (d postureDeployment) server(t *testing.T) *Server {
 	mode := "single"
 	if d.inCluster {
 		mode = "in-cluster"
+	}
+	if d.inCluster || d.inPod {
 		t.Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
 	} else {
 		t.Setenv("KUBERNETES_SERVICE_HOST", "")
@@ -109,6 +112,12 @@ func TestPostureDecisions(t *testing.T) {
 			postureDecisions{hostCheck: hostCheckSharedAllowlist, pprofCmdline: true, cloudDriver: true, cloudAck: true, ai: true, usageShared: true, openWarning: true, anyHostWarning: true}},
 		{"in-cluster, no auth (chart default)", postureDeployment{listen: "0.0.0.0", inCluster: true},
 			postureDecisions{hostCheck: hostCheckSharedAllowlist, pprofCmdline: true, cloudAck: true, usageShared: true, openWarning: true, anyHostWarning: true}},
+		{"in-cluster, no auth, connected to Radar Hub without Cloud mode", postureDeployment{listen: "0.0.0.0", tunnel: true, inCluster: true},
+			postureDecisions{hostCheck: hostCheckSharedAllowlist, pprofCmdline: true, cloudAck: true, ai: true, usageShared: true, openWarning: true, anyHostWarning: true}},
+		{"Pod with a supplied kubeconfig on 0.0.0.0", postureDeployment{listen: "0.0.0.0", inPod: true},
+			postureDecisions{hostCheck: hostCheckSharedAllowlist, pprofCmdline: true, cloudDriver: true, cloudAck: true, usageShared: true, openWarning: true, anyHostWarning: true}},
+		{"Pod with a supplied kubeconfig on loopback (dev workspace)", postureDeployment{listen: "127.0.0.1", inPod: true},
+			postureDecisions{hostCheck: hostCheckLoopbackOnly, terminal: true, pprof: true, pprofCmdline: true, cloudDriver: true, ai: true}},
 		{"in-cluster with auth", postureDeployment{listen: "0.0.0.0", authMode: "proxy", inCluster: true},
 			postureDecisions{hostCheck: hostCheckNone, pprof: true, cloudAck: true, usageShared: true}},
 		{"Radar Cloud", postureDeployment{listen: "0.0.0.0", authMode: "proxy", tunnel: true, hostedCloud: true, inCluster: true},
@@ -129,7 +138,7 @@ func TestPostureTwists(t *testing.T) {
 	local := postureDeployment{listen: "127.0.0.1"}
 
 	t.Run("tunnel request skips the Host check and gets no terminal", func(t *testing.T) {
-		s := postureDeployment{listen: "0.0.0.0", tunnel: true}.server(t)
+		s := postureDeployment{listen: "127.0.0.1", tunnel: true}.server(t)
 		r := postureRequest("localhost:9280", true)
 		if s.hostCheck(r) != hostCheckNone {
 			t.Error("tunnel request is Host-checked")
