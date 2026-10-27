@@ -56,7 +56,8 @@ export interface GitOpsInsightSummary {
   source?: string
   targetRevision?: string
   lastRevision?: string
-  // Latest successful rollback revision(s), while auto-sync is off.
+  // Revision(s) deployed by the latest successful marked rollback, set only while
+  // effective auto-sync is off. Absence does not mean no rollback happened.
   rollbackRevision?: string
   lastReconcile?: string
   partialReason?: string
@@ -236,12 +237,12 @@ export interface GitOpsHistoryItem {
   rawMessage?: string
   source?: string
   initiatedBy?: string
-  // Argo CD history entries: whether the rollback API accepts this entry
-  // (false when it records no source). Absent on the current-operation row,
-  // and on every row from a Radar that predates the field.
+  // Whether an Argo CD history entry has an ID and recorded source(s), independently
+  // of auto-sync, lifecycle, in-flight operations and RBAC. Absent where not
+  // applicable (current-operation and Flux rows), or not supplied by Radar.
   rollbackable?: boolean
   // Compatibility warning: the current Application or history entry uses plural sources.
-  multiSource?: boolean
+  rollbackMultiSourceWarning?: boolean
 }
 
 export interface GitOpsCapabilities {

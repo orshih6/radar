@@ -51,16 +51,16 @@ describe('RollbackDialog confirmation', () => {
     expect(label?.nextElementSibling?.classList.contains('break-words')).toBe(true)
   })
 
-  it.each([true, false])('shows controller compatibility when either the current Application or entry uses multiple sources (%s)', async (multiSource) => {
+  it.each([true, false])('shows controller compatibility when either the current Application or entry uses multiple sources (%s)', async (multiSourceWarning) => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
     await act(async () => root?.render(
-      <RollbackDialog open appLabel="argocd/demo" revision="aaa111, bbb222" multiSource={multiSource} onCancel={() => {}} onConfirm={() => {}} />,
+      <RollbackDialog open appLabel="argocd/demo" revision="aaa111, bbb222" multiSourceWarning={multiSourceWarning} onCancel={() => {}} onConfirm={() => {}} />,
     ))
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
     const note = 'On Argo CD before 2.12, rolling back across a single-source/multi-source change or to a multi-source entry can deploy the wrong revisions or render nothing; with prune, it can delete resources.'
-    expect(dialog.textContent?.includes(note)).toBe(multiSource)
+    expect(dialog.textContent?.includes(note)).toBe(multiSourceWarning)
   })
 
 })

@@ -48,9 +48,12 @@ type Summary struct {
 	Source              string `json:"source,omitempty"`
 	TargetRevision      string `json:"targetRevision,omitempty"`
 	LastRevision        string `json:"lastRevision,omitempty"`
-	RollbackRevision    string `json:"rollbackRevision,omitempty"`
-	LastReconcile       string `json:"lastReconcile,omitempty"`
-	PartialReason       string `json:"partialReason,omitempty"`
+	// RollbackRevision is the revision(s) deployed by the latest successful marked
+	// rollback, set only while effective auto-sync is off. Absence does not mean
+	// no rollback happened.
+	RollbackRevision string `json:"rollbackRevision,omitempty"`
+	LastReconcile    string `json:"lastReconcile,omitempty"`
+	PartialReason    string `json:"partialReason,omitempty"`
 	// AutoSyncMode is the human-readable syncPolicy chip label, e.g.
 	// "Manual", "Auto", "Auto · prune", "Auto · self-heal",
 	// "Auto · prune · self-heal", "Suspended" (Flux), or "".
@@ -285,12 +288,12 @@ type HistoryItem struct {
 	RawMessage  string `json:"rawMessage,omitempty"`
 	Source      string `json:"source,omitempty"`
 	InitiatedBy string `json:"initiatedBy,omitempty"`
-	// Rollbackable is set on every Argo CD status.history entry: whether
-	// RollbackArgoApp accepts it (gitops.ArgoHistoryEntryRollbackable). Nil on
-	// rows it doesn't apply to, such as the current operation and Flux.
+	// Rollbackable reports whether an Argo CD history entry has an ID and recorded
+	// source(s), independently of auto-sync, lifecycle, in-flight operations and RBAC.
+	// Nil on rows it does not apply to, such as the current operation and Flux.
 	Rollbackable *bool `json:"rollbackable,omitempty"`
-	// MultiSource warns when either the current spec or this entry uses plural sources.
-	MultiSource bool `json:"multiSource,omitempty"`
+	// RollbackMultiSourceWarning warns when either the current spec or this entry uses plural sources.
+	RollbackMultiSourceWarning bool `json:"rollbackMultiSourceWarning,omitempty"`
 }
 
 type Capabilities struct {
@@ -1458,7 +1461,7 @@ func buildHistory(root *unstructured.Unstructured, tool string) []HistoryItem {
 			rollbackable := gitops.ArgoHistoryEntryRollbackable(m)
 			sources, _, _ := unstructured.NestedSlice(m, "sources")
 			revisions, _, _ := unstructured.NestedStringSlice(m, "revisions")
-			out = append(out, HistoryItem{ID: id, Revision: argoRevisionLabel(m), DeployedAt: gitops.StringValue(m["deployedAt"]), Source: argoSourceLabel(m), InitiatedBy: initiatedBy, Rollbackable: &rollbackable, MultiSource: len(currentSources) > 0 || len(sources) > 0 || len(revisions) > 0})
+			out = append(out, HistoryItem{ID: id, Revision: argoRevisionLabel(m), DeployedAt: gitops.StringValue(m["deployedAt"]), Source: argoSourceLabel(m), InitiatedBy: initiatedBy, Rollbackable: &rollbackable, RollbackMultiSourceWarning: len(currentSources) > 0 || len(sources) > 0 || len(revisions) > 0})
 		}
 		if op, ok, _ := unstructured.NestedMap(root.Object, "status", "operationState"); ok {
 			initiatedBy := ""

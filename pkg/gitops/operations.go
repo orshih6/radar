@@ -873,9 +873,9 @@ func argoSyncRevisions(sync map[string]any) []string {
 	return nil
 }
 
-// ArgoAppliedCurrentComparison reports whether the last apply used the current
-// comparison's revisions and sources. A recent comparison alone does not prove
-// Argo has applied its desired state, for example while a sync window is closed.
+// ArgoAppliedCurrentComparison compares syncResult revisions and sources with
+// the current comparison only. It does not check the operation phase or dry run;
+// callers must check those before treating a match as a completed live apply.
 func ArgoAppliedCurrentComparison(app *unstructured.Unstructured) bool {
 	result, _, _ := unstructured.NestedMap(app.Object, "status", "operationState", "syncResult")
 	comparison, _, _ := unstructured.NestedMap(app.Object, "status", "sync")

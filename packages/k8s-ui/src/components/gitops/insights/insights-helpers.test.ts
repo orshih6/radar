@@ -31,6 +31,21 @@ describe('confirmed missing resources', () => {
     expect(isArgoResourceSyncEligible(item, true)).toBe(true)
   })
 
+  it.each(['OutOfSync', 'Unknown', undefined])('defers to the hazard before rollback advice for %s', (sync) => {
+    expect(missingResourceMessage(sync, { hazard: 'Sync can delete resources.', rolledBack: true })).toBe('Not present in the cluster. See the sync warning above before syncing this Application.')
+    expect(missingResourceMessage(sync, { hazard: 'Sync can delete resources.' })).toBe('Not present in the cluster. See the sync warning above before syncing this Application.')
+  })
+
+  it('keeps refresh advice for Synced even with hazard and rollback context', () => {
+    expect(missingResourceMessage('Synced', { hazard: 'Sync can delete resources.', rolledBack: true })).toBe(missingResourceMessage('Synced'))
+  })
+
+  it('uses named rollback context and treats an empty hazard as absent', () => {
+    expect(missingResourceMessage('OutOfSync', { rolledBack: true })).toBe('Declared in Git but not present in the cluster after a rollback. Sync can recreate it and undo the rollback.')
+    expect(missingResourceMessage('OutOfSync', { hazard: '', rolledBack: true })).toBe(missingResourceMessage('OutOfSync', { rolledBack: true }))
+    expect(missingResourceMessage('OutOfSync', { rolledBack: false })).toBe(missingResourceMessage('OutOfSync'))
+  })
+
   it('asks for a refresh when Argo still reports Synced', () => {
     expect(missingResourceMessage('Synced')).toContain('Refresh')
     expect(missingResourceMessage('Synced')).not.toContain('Sync the application')

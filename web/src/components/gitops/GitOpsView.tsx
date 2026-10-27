@@ -939,7 +939,7 @@ function GitOpsDetailView({ namespaces, onOpenResource, onOpenSettings }: GitOps
             revision={rollbackTarget?.revision || ''}
             historyId={rollbackTarget?.id}
             source={rollbackTarget?.source}
-            multiSource={rollbackTarget?.multiSource}
+            multiSourceWarning={rollbackTarget?.rollbackMultiSourceWarning}
             pending={argoRollback.isPending}
             blockedReason={argoRollbackBlockedReason || (argoRollbackUpgrade ? radarUpgradeNoteText(argoRollbackUpgrade) : undefined)}
             onCancel={() => setRollbackTarget(null)}
