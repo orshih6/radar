@@ -72,3 +72,11 @@ describe('OpenTelemetry drawer identity and meaning', () => {
     expect(render('other.example/v1', 'Instrumentation', { custom: 'generic-visible' })).toContain('generic-visible')
   })
 })
+
+it('bounds both recorded upgrade language summaries and detailed rows', () => {
+ const blocked = Object.fromEntries(Array.from({length:30},(_,i)=>[`language-${String(i).padStart(2,'0')}${'x'.repeat(200)}`, 'recorded reason']))
+ const html=renderToString(<ResourceRendererDispatch resource={{kind:'instrumentations',namespace:'test',name:'test'}} data={{apiVersion:'opentelemetry.io/v1alpha1',kind:'Instrumentation',metadata:{name:'test',namespace:'test'},status:{upgradeBlockedVersions:blocked}}} onCopy={()=>{}} copied={null} showCommonSections={false} />)
+ expect(html).toContain('20 more in YAML')
+ expect(html).not.toContain('language-10')
+ expect(html).not.toContain('x'.repeat(161))
+})
