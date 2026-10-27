@@ -222,13 +222,13 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 		Annotations: readOnly,
 	}, logToolCall("get_pod_logs", handleGetPodLogs))
 
-	diagnoseDescription := "Get bounded evidence for a workload, OpenTelemetryCollector, " +
+	diagnoseDescription := "Get bounded evidence for a workload, OpenTelemetryCollector/Canary, " +
 		"GitOps reconciler or network entry in one call; " +
 		"it does not run an agent and is not an authoritative root-cause verdict or an exhaustive account. " +
 		"Use for CrashLoopBackOff, OOMKilled, image-pull, readiness, scheduling, GitOps sync/health, " +
 		"or traffic not reaching a service, route or ingress. Pod, Deployment, StatefulSet, DaemonSet and Argo Rollout " +
 		"bundle resource context, selected/capped current and previous logs, Warning events, startup blockers, " +
-		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector returns root reconciliation and owned-workload bundles. " +
+		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector/Canary return root reconciliation and owned-workload bundles; Canary also includes its declared target. " +
 		"Warning events are a capped sample for the observed resource and Pods; UID-less evidence cannot prove an incarnation. Use get_events for a broader, dedicated event read, including history. " +
 		"`crashCause` is evidence, not a root-cause verdict. `logLineSelection` ranks " +
 		"`" + crashLineFatalPattern + "`, `" + crashLineHeaderOnly + "`, `" +
