@@ -1558,9 +1558,3 @@ The operator's precedence applies: a named or false Pod annotation wins; Pod=tru
 `ignoredWorkloadMetadataAnnotations` lists injection keys placed on workload metadata; the mutator reads Pod/template or Namespace annotations instead. This is configuration context, not a global Issue. Supported sources are Pods, apps workloads, Jobs/CronJobs and inline Argo Rollout Pod templates. An absent block is not proof there are no injection requests: unreadable Namespace defaults and unresolved templates may be outside the evidence. Native Warning events, including observed `InstrumentationRequestRejected`, remain available through the existing UID-filtered Pod diagnosis/event paths.
 
 The REST AI and MCP detail surfaces share this projection. Basic list summaries do not perform related-object lookups. Existing UI annotations/YAML/events remain the detailed inspection surface; no additional Pod warning banner or outage classification is added.
-
-## Recorded instrumentation upgrade advisory
-
-Instrumentation detail context includes optional `instrumentationUpgrade` with `recordedBlocks`, total `recordedBlockCount`, and `truncated`. This comes from the operator's startup `status.upgradeBlockedVersions` record; no timestamp is invented, and retained status can outlive manual image changes. It is not a global operational Issue, application outage or fresh compatibility verdict. Deleting resources do not get this advisory.
-
-Each block names its language only. The operator can update its default-image annotation while refusing to change the spec image, so a current-image/default comparison does not establish whether a recorded block is current. Image values and arbitrary native status messages are excluded. Up to ten sorted blocks are shown; language names are limited to 160 characters, and `truncated` covers omissions or shortening. Inspect full YAML and operator logs for the recorded reason and an upgrade decision.

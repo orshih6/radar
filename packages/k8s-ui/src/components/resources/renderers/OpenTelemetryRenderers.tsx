@@ -62,7 +62,6 @@ export function OpenTelemetryInstrumentationRenderer({ data }: { data: any }) {
         <Property label="Propagators" value={spec.propagators?.join(', ')} />
         <Property label="Sampler" value={spec.sampler?.type} />
         <Property label="Sampler argument" value={spec.sampler?.argument} />
-        {blocked.length > 0 && <Property label="Recorded image upgrade blocks" value={`${blockedPreview.map(languageLabel).join(', ')}${blocked.length > 10 ? `; ${blocked.length - 10} more in YAML` : ''}`}  />}
       </PropertyList>
       <p className="mt-2 text-xs text-theme-text-tertiary">These settings configure injection into annotated workloads. This resource does not report which Pods were injected or whether telemetry reaches the endpoint.</p>
       {blocked.length > 0 && <p className="mt-2 text-sm text-theme-text-secondary">The operator recorded these blocks during a startup upgrade check. This record can remain after image changes. Inspect the current auto-instrumentation images, status in YAML and operator logs before choosing a supported image.</p>}

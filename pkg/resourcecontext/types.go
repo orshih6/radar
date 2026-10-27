@@ -32,9 +32,6 @@ import (
 // emerges that needs deterministic prose, add it as a separate
 // `explain_resource` tool rather than re-introducing it inline here.
 type ResourceContext struct {
-	// InstrumentationUpgrade is a recorded operator startup-upgrade result,
-	// not current application health or a fresh image-compatibility check.
-	InstrumentationUpgrade *InstrumentationUpgradeRecord `json:"instrumentationUpgrade,omitempty"`
 	// AutoInstrumentation describes declared OTel injection requests, not
 	// successful injection or telemetry delivery. Absence is not an all-clear.
 	AutoInstrumentation *AutoInstrumentationContext `json:"autoInstrumentation,omitempty"`
@@ -91,17 +88,6 @@ type ResourceContext struct {
 	// have changed it, never who did.
 	TemplateDivergence *TemplateDivergence `json:"templateDivergence,omitempty"`
 	Omitted            []OmittedField      `json:"omitted,omitempty"`
-}
-
-type InstrumentationUpgradeRecord struct {
-	RecordedBlocks     []InstrumentationUpgradeBlock `json:"recordedBlocks"`
-	RecordedBlockCount int                           `json:"recordedBlockCount"`
-	// Truncated means entries were omitted or a language name was shortened.
-	Truncated bool `json:"truncated,omitempty"`
-}
-
-type InstrumentationUpgradeBlock struct {
-	Language string `json:"language"`
 }
 
 // AutoInstrumentationContext evaluates the supported Pod/template annotations

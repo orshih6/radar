@@ -178,7 +178,7 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 		return &ResourceContext{Tier: opts.Tier}
 	}
 
-	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children, AutoInstrumentation: opts.AutoInstrumentation, InstrumentationUpgrade: instrumentationUpgradeRecord(obj)}
+	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children, AutoInstrumentation: opts.AutoInstrumentation}
 	omitted := newOmittedTracker()
 	// Canonical context references still require Get access, even when a
 	// host's relationship view intentionally exposes namespace-readable names.
