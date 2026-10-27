@@ -828,13 +828,16 @@ export function useResourceAudit(
 // the "Operational Issues" section in the resource detail. Cluster-scoped
 // resources pass "_" for namespace; namespaced ones also scope the scan via
 // ?namespaces= for a cheap, bounded Compose.
+// rootObservation is an opaque root UID/resourceVersion token: changes schedule
+// a refresh at most every 10s, without creating a query key per version. Omit it
+// to retain only the visible-tab timer and stale-view/focus refreshes.
 export function useResourceIssues(
   kind: string,
   group: string | undefined,
   namespace: string,
   name: string,
   enabled = true,
-  observation?: string,
+  rootObservation?: string,
 ) {
   const clusterScoped = !namespace;
   const pathNs = clusterScoped ? "_" : encodeURIComponent(namespace);
@@ -864,31 +867,31 @@ export function useResourceIssues(
     if (enabled && kind && name && support === "supported" && error instanceof RadarFeatureUnsupportedError) void refetch();
   }, [enabled, kind, name, support, error, refetch]);
   const identity = JSON.stringify(queryKey);
-  const previous = useRef<{ identity: string; observation: string | undefined; refreshedAt: number } | null>(null);
+  const previous = useRef<{ identity: string; rootObservation: string | undefined; refreshedAt: number } | null>(null);
   useEffect(() => {
     const prior = previous.current;
     if (prior?.identity !== identity) {
-      previous.current = { identity, observation, refreshedAt: Date.now() };
+      previous.current = { identity, rootObservation, refreshedAt: Date.now() };
       return;
     }
-    if (prior.observation === undefined) {
-      prior.observation = observation;
+    if (prior.rootObservation === undefined) {
+      prior.rootObservation = rootObservation;
       return;
     }
     if (clusterScoped || !enabled || !kind || !name || query.error instanceof RadarFeatureUnsupportedError ||
-      observation === undefined || prior.observation === observation) return;
+      rootObservation === undefined || prior.rootObservation === rootObservation) return;
 
-    // Keep the observation out of the query key, and bound Compose requests even
+    // Keep the rootObservation out of the query key, and bound Compose requests even
     // when a busy workload's resource version changes continuously.
     const delay = Math.max(0, 10000 - (Date.now() - Math.max(prior.refreshedAt, query.dataUpdatedAt)));
     const timer = window.setTimeout(() => {
-      prior.observation = observation;
+      prior.rootObservation = rootObservation;
       prior.refreshedAt = Date.now();
       void queryClient.invalidateQueries({ queryKey, exact: true,
         refetchType: focusManager.isFocused() ? 'active' : 'none' });
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [identity, observation, enabled, kind, name, clusterScoped, queryClient, query.error, query.dataUpdatedAt, queryKey]);
+  }, [identity, rootObservation, enabled, kind, name, clusterScoped, queryClient, query.error, query.dataUpdatedAt, queryKey]);
   return query;
 }
 
