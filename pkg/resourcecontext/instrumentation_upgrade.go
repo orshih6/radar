@@ -29,17 +29,6 @@ func instrumentationUpgradeRecord(obj runtime.Object) *InstrumentationUpgradeRec
 	for _, language := range names {
 		short := truncateRunes(language, 160)
 		entry := InstrumentationUpgradeBlock{Language: short}
-		out.Truncated = out.Truncated || short != language
-		field := language
-		if field == "apache-httpd" {
-			field = "apacheHttpd"
-		}
-		image, _, _ := unstructured.NestedString(u.Object, "spec", field, "image")
-		stored := u.GetAnnotations()["instrumentation.opentelemetry.io/default-auto-instrumentation-"+language+"-image"]
-		if image != "" && stored != "" {
-			matches := image == stored
-			entry.AutoInstrumentationImageMatchesStoredDefault = &matches
-		}
 		out.RecordedBlocks = append(out.RecordedBlocks, entry)
 	}
 	return out

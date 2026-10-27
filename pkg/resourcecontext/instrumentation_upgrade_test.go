@@ -14,13 +14,13 @@ import (
 func TestInstrumentationUpgradeIsARecordedBoundedAdvisory(t *testing.T) {
 	u := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "opentelemetry.io/v1alpha1", "kind": "Instrumentation", "metadata": map[string]any{"name": "java", "namespace": "app", "annotations": map[string]any{"instrumentation.opentelemetry.io/default-auto-instrumentation-java-image": "private-default-image"}}, "spec": map[string]any{"java": map[string]any{"image": "private-current-image"}}, "status": map[string]any{"upgradeBlockedVersions": map[string]any{"java": "private-status-message"}}}}
 	got := Build(context.Background(), u, Options{}).InstrumentationUpgrade
-	if got == nil || got.RecordedBlockCount != 1 || len(got.RecordedBlocks) != 1 || got.RecordedBlocks[0].AutoInstrumentationImageMatchesStoredDefault == nil || *got.RecordedBlocks[0].AutoInstrumentationImageMatchesStoredDefault {
+	if got == nil || got.RecordedBlockCount != 1 || len(got.RecordedBlocks) != 1 {
 		t.Fatalf("wrong record: %+v", got)
 	}
 	_ = unstructured.SetNestedField(u.Object, "private-default-image", "spec", "java", "image")
 	got = Build(context.Background(), u, Options{}).InstrumentationUpgrade
-	if got == nil || !*got.RecordedBlocks[0].AutoInstrumentationImageMatchesStoredDefault {
-		t.Fatal("manual image change removed historical record or comparison")
+	if got == nil || got.RecordedBlockCount != 1 || got.RecordedBlocks[0].Language != "java" {
+		t.Fatal("manual image change removed historical record")
 	}
 	raw, _ := json.Marshal(got)
 	if strings.Contains(string(raw), "private-") {

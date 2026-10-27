@@ -105,11 +105,6 @@ type InstrumentationUpgradeRecord struct {
 
 type InstrumentationUpgradeBlock struct {
 	Language string `json:"language"`
-	// This compares spec's auto-instrumentation image with the operator's
-	// stored default annotation NOW, not with an image captured at block time.
-	// Neither value proves the current image is still blocked or supported.
-	// Omitted means one input is unavailable; image values are never copied.
-	AutoInstrumentationImageMatchesStoredDefault *bool `json:"autoInstrumentationImageMatchesStoredDefault,omitempty"`
 }
 
 // AutoInstrumentationContext evaluates the supported Pod/template annotations
