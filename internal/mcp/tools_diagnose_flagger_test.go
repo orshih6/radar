@@ -50,3 +50,28 @@ func TestFlaggerDiagnosisSeparatesDeclaredTargetFromObservedPrimary(t *testing.T
 		t.Fatal("excluded history was not qualified")
 	}
 }
+
+func TestFlaggerDiagnosisWithholdsUnreadableDeclaredTarget(t *testing.T) {
+	root := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "flagger.app/v1beta1", "kind": "Canary", "metadata": map[string]any{"name": "release", "namespace": "observe", "uid": "release"}, "spec": map[string]any{"targetRef": map[string]any{"apiVersion": "apps/v1", "kind": "Deployment", "name": "target"}}}}
+	target := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "target", Namespace: "observe", UID: "target"}, Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "target"}}, Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "private-image-marker", Image: "private-image-marker"}}}}}}
+	initOperatorDiagnosisCache(t, root, target)
+	ctx := withTestUserPerms(t, "canary-reader", nil, []string{"observe"})
+	perms := getPermCache().Get("canary-reader", nil)
+	perms.SetCanI("get", "flagger.app", "canaries", "observe", true)
+	perms.SetCanI("get", "apps", "deployments", "observe", false)
+	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("canary", "observe", "release"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := extractText(t, result)
+	if strings.Contains(text, "private-image-marker") {
+		t.Fatalf("denied target body leaked: %s", text)
+	}
+	var got operatorDiagnoseResponse
+	if err := json.Unmarshal([]byte(text), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.DeclaredTarget == nil || got.DeclaredTarget.Diagnosis != nil || !strings.Contains(got.DeclaredTarget.Error, "forbidden") {
+		t.Fatalf("denied target not qualified: %s", text)
+	}
+}
