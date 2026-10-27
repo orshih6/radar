@@ -36,7 +36,9 @@ import (
 // internal services.
 type Options struct {
 	// Children is an access-aware direct-child preview, precomputed by hosts.
-	Children            *ChildrenContext
+	Children *ChildrenContext
+	// ChildrenUnavailable requires nil Children: the whole host observation was
+	// discarded. With both nil/false, this host supplied no child observation.
 	ChildrenUnavailable bool
 	Reflections         ReflectionLookup
 	Tier                ContextTier

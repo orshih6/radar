@@ -38,7 +38,8 @@ type ResourceContext struct {
 	Tier       ContextTier        `json:"tier"`
 	Owner      *ContextRef        `json:"owner,omitempty"`
 	// Children names current direct children supplied by the host,
-	// resolved by owner-reference UID, never labels or generated names.
+	// resolved by owner-reference UID, never labels or generated names. Hosts
+	// currently supply this for Collector/Canary roots only; absent is not empty.
 	Children *ChildrenContext `json:"children,omitempty"`
 	// ManagedBy names the highest readable controller and separately observed
 	// non-GitOps managing controllers. Manager carries GitOps/Helm evidence.
