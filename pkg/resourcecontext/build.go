@@ -41,6 +41,13 @@ type Options struct {
 	Reflections         ReflectionLookup
 	Tier                ContextTier
 
+	// AutoInstrumentation was computed from access-checked cache reads by the
+	// host. A connection change discards the whole observation.
+	AutoInstrumentation            *AutoInstrumentationContext
+	AutoInstrumentationUnavailable bool
+	Reflections                    ReflectionLookup
+	Tier                           ContextTier
+
 	// AccessChecker gates every emitted ContextRef. nil = no gating (treat
 	// as fully authorized — local-kubeconfig / tests).
 	AccessChecker RefAccessChecker
@@ -182,7 +189,7 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 		return &ResourceContext{Tier: opts.Tier}
 	}
 
-	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children}
+	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children, AutoInstrumentation: opts.AutoInstrumentation}
 	omitted := newOmittedTracker()
 	// Canonical context references still require Get access, even when a
 	// host's relationship view intentionally exposes namespace-readable names.
@@ -199,6 +206,9 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 	}
 	if opts.ChildrenUnavailable {
 		omitted.add("children", OmittedUnavailable)
+	}
+	if opts.AutoInstrumentationUnavailable {
+		omitted.add("autoInstrumentation", OmittedUnavailable)
 	}
 
 	// Topology-derived relationships drive ManagedBy / Exposes / SelectedBy /
