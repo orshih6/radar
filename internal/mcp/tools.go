@@ -1326,6 +1326,10 @@ func buildMCPResourceContext(ctx context.Context, obj runtime.Object, kind, name
 }
 
 func buildMCPResourceContextWithStaleChecks(ctx context.Context, obj runtime.Object, kind, namespace, name string, tier resourcecontext.ContextTier, staleChecks []k8s.StaleSecretEnvCheck, issueSummary *resourcecontext.IssueSummary) *resourcecontext.ResourceContext {
+	return buildMCPResourceContextWithOperatorChildren(ctx, obj, kind, namespace, name, tier, staleChecks, issueSummary, nil)
+}
+
+func buildMCPResourceContextWithOperatorChildren(ctx context.Context, obj runtime.Object, kind, namespace, name string, tier resourcecontext.ContextTier, staleChecks []k8s.StaleSecretEnvCheck, issueSummary *resourcecontext.IssueSummary, children *k8s.OperatorChildren) *resourcecontext.ResourceContext {
 	if obj == nil {
 		return nil
 	}
@@ -1380,6 +1384,13 @@ func buildMCPResourceContextWithStaleChecks(ctx context.Context, obj runtime.Obj
 		opts.Topology = topo
 		opts.Provider = prov
 		opts.DynamicProv = dyn
+	}
+	if children == nil {
+		children = k8s.OperatorChildrenForObject(obj, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })
+	}
+	if children != nil {
+		opts.Children = children.Context
+		opts.ChildrenUnavailable = children.Unavailable != ""
 	}
 	opts.Ownership = func(rel *topology.Relationships, fetched ownership.Observation) {
 		k8s.AnswerOwner(rel, fetched, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })

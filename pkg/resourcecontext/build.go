@@ -35,8 +35,11 @@ import (
 // in internal/* pre-compute IssueSummary / AuditSummary / PolicyReports and
 // pass them in, so we don't reach into internal/issues or internal/audit.
 type Options struct {
-	Reflections ReflectionLookup
-	Tier        ContextTier
+	// Children is an access-aware direct-child preview, precomputed by hosts.
+	Children            *ChildrenContext
+	ChildrenUnavailable bool
+	Reflections         ReflectionLookup
+	Tier                ContextTier
 
 	// AccessChecker gates every emitted ContextRef. nil = no gating (treat
 	// as fully authorized — local-kubeconfig / tests).
@@ -179,8 +182,24 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 		return &ResourceContext{Tier: opts.Tier}
 	}
 
-	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj)}
+	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children}
 	omitted := newOmittedTracker()
+	// Canonical context references still require Get access, even when a
+	// host's relationship view intentionally exposes namespace-readable names.
+	if opts.Children != nil {
+		children := *opts.Children
+		children.Items = filterRefs(ctx, opts.AccessChecker, opts.Children.Items, "children", nil)
+		if len(children.Items) != len(opts.Children.Items) {
+			children.Narrowed = true
+		}
+		if children.Items == nil {
+			children.Items = []ContextRef{}
+		}
+		rc.Children = &children
+	}
+	if opts.ChildrenUnavailable {
+		omitted.add("children", OmittedUnavailable)
+	}
 
 	// Topology-derived relationships drive ManagedBy / Exposes / SelectedBy /
 	// ScaledBy / RunsOn / Uses.ServiceAccount. T23 made
