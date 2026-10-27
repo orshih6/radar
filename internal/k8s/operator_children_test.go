@@ -79,3 +79,13 @@ func TestOperatorNonControllerChildrenDoNotConsumeRuntimeSlots(t *testing.T) {
 		t.Fatal("general direct-child preview lost co-owned resources")
 	}
 }
+
+func TestOperatorDeniedWorkloadInventoryIsNotAnEmptyRuntimeVerdict(t *testing.T) {
+	w, root := operatorChildrenWorld()
+	got := operatorChildrenFromSource(ownershiptest.Scan(w), root, func(*ownership.Catalog) ownership.Access {
+		return liveManagerAccess{Access: ownership.Unrestricted(), denied: resourceid.GroupKind{Group: "apps", Kind: "Deployment"}}
+	})
+	if got.WorkloadsComplete || len(got.Workloads) != 0 {
+		t.Fatalf("denied inventory looked complete: %+v", got)
+	}
+}
