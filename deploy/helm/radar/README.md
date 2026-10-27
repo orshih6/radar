@@ -319,7 +319,7 @@ before upgrading if the added visibility is unwanted.
 ### Cloud owner integration writes
 
 Some Radar actions write integration resources that the built-in `admin` and
-`edit` roles don't cover on a stock install. The chart grants those writes to
+`edit` roles don't cover on a stock install. The chart can grant those writes to
 the owner tier from a reviewed [write table](files/integration-write-baseline.yaml),
 with one switch per capability:
 
@@ -328,7 +328,7 @@ cloud:
   defaultRbac:
     integrationWrite:
       gitops:
-        owner: auto   # auto | true | false
+        owner: false  # false (default) | true | auto
 ```
 
 Today the table grants one thing: `get` and `patch` on Argo CD Applications
@@ -340,12 +340,18 @@ stock aggregated roles, and Velero run messages (`downloadrequests`) are
 withheld pending review. CloudNativePG actions add no write grant; their
 existing caller permissions continue to decide access.
 
-- `auto` (default): on only when `cloud.defaultRbac.ownerClusterRole` is exactly
+The grant is off by default for every owner role: the default owner is `admin`
+bound cluster-wide, deliberately without cluster-scoped writes, while patching an
+Application lets the Argo CD controller create cluster-scoped resources (the
+built-in `default` AppProject allows them), widening that boundary. For a
+`cluster-admin` owner, the grant adds nothing.
+
+- `false` (default): off. This removes only this add-on. Kubernetes RBAC is additive:
+  vendor aggregation, other roles and your own bindings still apply.
+- `true`: on with any owner role, including a custom one.
+- `auto`: on only when `cloud.defaultRbac.ownerClusterRole` is exactly
   `admin` or `cluster-admin`. This compares the name; a modified `admin` role is
   not detected. With a custom owner role, `auto` grants nothing.
-- `true`: on with any owner role, including a custom one.
-- `false`: off. This removes only this add-on. Kubernetes RBAC is additive:
-  vendor aggregation, other roles and your own bindings still apply.
 
 The add-on also requires `cloud.enabled`, `rbac.create`,
 `cloud.defaultRbac.create`, `cloud.defaultRbac.owner`, and the `argo`
@@ -381,19 +387,24 @@ project's destination, kind and namespace limits. The controller also enforces
 sync windows (Argo CD 2.11 and later). Source integrity (GPG) covers Git sources
 only; on Argo CD 3.x, a sync with local manifests can bypass it.
 
-A stock `admin` owner already has indirect routes to this authority, but
-admission policies may block them, so the grant can add real authority. If
-owners shouldn't have it, set `false`. A namespace RoleBinding can't narrow it,
-or any other cluster-wide default binding. For narrower access, turn the
-add-on off (or set `cloud.defaultRbac.create=false`) and bind your own
-namespace- or resource-name-scoped roles.
+A namespace RoleBinding can't narrow this add-on or any other cluster-wide
+default binding. For narrower access, leave the add-on off (or set
+`cloud.defaultRbac.create=false`) and bind your own namespace- or
+resource-name-scoped roles.
 
-**Upgrades.** Only a chart install or upgrade applies the grant. On `helm upgrade
---reuse-values` from an older chart, the missing key follows the capability's
-declared default (`auto` for gitops), so a stock install gains the grant; pass
-`--set cloud.defaultRbac.integrationWrite.gitops.owner=false` to keep it off.
-Updating only the Radar binary, including Radar Cloud self-upgrade, installs no
-RBAC.
+**Upgrades.** To turn it on, set
+`cloud.defaultRbac.integrationWrite.gitops.owner=true` and apply it with a chart
+upgrade (substitute your release name and namespace):
+
+```bash
+helm upgrade radar skyhook/radar -n radar --reuse-values \
+  --set cloud.defaultRbac.integrationWrite.gitops.owner=true
+```
+
+On `helm upgrade --reuse-values` from an older chart, a missing key follows the
+capability's declared default (`false` for gitops), so it stays off. An existing
+explicit `true` or `auto` setting is preserved. Updating only the Radar binary,
+including Radar Cloud one-click self-upgrade, installs no RBAC.
 
 GitOps action controls check the caller's permissions per object and disable
 denied actions with an explanation. Controls stay available while the first check

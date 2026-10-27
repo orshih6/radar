@@ -164,11 +164,17 @@ names each object whose reconcile was already requested. This note stays visible
 in the UI and accompanies structured MCP errors; it does not imply controller completion.
 `manage_gitops` returns the same denied tuple, or the admission summary, as a tool error.
 No action gains permissions from the capability endpoint. In Radar Cloud, the
-chart's owner-only write add-on grants `get`/`patch` on Argo CD Applications
-(`cloud.defaultRbac.integrationWrite.gitops.owner`, default `auto`: on when the
-owner role is the stock `admin` or `cluster-admin`); stock Flux already lets
-`admin` and `edit` patch its objects. See the [chart README](../deploy/helm/radar/README.md#cloud-owner-integration-writes)
-for the controller authority that grant delegates.
+chart's owner-only write add-on can grant `get`/`patch` on Argo CD Applications
+(`cloud.defaultRbac.integrationWrite.gitops.owner`, default `false` for every
+owner role). The default owner role is `admin` bound cluster-wide, deliberately
+without cluster-scoped writes; patching an Application delegates the Argo CD
+controller's ability to create cluster-scoped resources (allowed by the built-in
+`default` AppProject), widening that boundary. For a `cluster-admin` owner it adds
+nothing. Set `true` to opt in, or `auto` to enable only when the owner role is named
+`admin` or `cluster-admin`, and apply a chart upgrade; one-click upgrades update
+only the image. Stock Flux already lets `admin` and `edit` patch its objects. See
+the [chart README](../deploy/helm/radar/README.md#cloud-owner-integration-writes)
+for the grant's authority and upgrade command.
 
 ### Keyboard shortcuts (per-app detail page)
 

@@ -44,13 +44,13 @@ describe('GitOps permission gates on rendered controls', () => {
       expect(actionButton(html, label)).toContain('disabled=""')
     }
   })
-  it('explains the deployment authority Cloud owners grant before advising a chart upgrade', () => {
+  it('explains why the Cloud owner grant defaults off and how to turn it on', () => {
     const html = renderToString(<GitOpsDetailLayout {...base} isCloudDeployment
       actionDisabledReasons={{ sync: reason, refresh: reason, suspend: reason }}
       actionPermissions={{ sync: argoDenial, refresh: argoDenial, suspend: argoDenial }} />)
     const doc = new DOMParser().parseFromString(html, 'text/html')
     expect(doc.body.textContent).toContain("Your role can't sync, refresh or change auto-sync for this Application.")
-    expect(doc.body.textContent).toContain("Radar Cloud owners: the Argo CD write grant delegates the Argo CD controller's deployment authority. Review Chart RBAC settings, then apply it with helm upgrade; one-click upgrades update only the image.")
+    expect(doc.body.textContent).toContain("Radar Cloud owners: the Argo CD write grant is off by default because it delegates the Argo CD controller's deployment authority. To turn it on, see Chart RBAC settings, then apply it with helm upgrade; one-click upgrades update only the image.")
     expect(doc.querySelector('code')?.textContent).toBe('helm upgrade')
     expect(html).toContain('Chart RBAC settings')
     expect(html).toContain('README.md#cloud-owner-integration-writes')

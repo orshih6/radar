@@ -7,7 +7,19 @@ set:
   cloud.url: wss://cloud.example
   cloud.clusterName: test
 tests:
-  - it: grants owners get and patch on Argo CD Applications with the stock admin role
+  - it: defaults off with the stock admin owner role
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: defaults off with a cluster-admin owner role
+    set:
+      cloud.defaultRbac.ownerClusterRole: cluster-admin
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: auto grants owners get and patch on Argo CD Applications with the stock admin role
+    set:
+      cloud.defaultRbac.integrationWrite.gitops.owner: auto
     asserts:
       - hasDocuments:
           count: 2
@@ -51,18 +63,21 @@ tests:
         documentIndex: 1
   - it: auto grants with a cluster-admin owner role
     set:
+      cloud.defaultRbac.integrationWrite.gitops.owner: auto
       cloud.defaultRbac.ownerClusterRole: cluster-admin
     asserts:
       - hasDocuments:
           count: 2
   - it: auto grants nothing with a custom owner role
     set:
+      cloud.defaultRbac.integrationWrite.gitops.owner: auto
       cloud.defaultRbac.ownerClusterRole: platform-owner
     asserts:
       - hasDocuments:
           count: 0
   - it: auto compares the role name exactly
     set:
+      cloud.defaultRbac.integrationWrite.gitops.owner: auto
       cloud.defaultRbac.ownerClusterRole: Admin
     asserts:
       - hasDocuments:
@@ -95,12 +110,12 @@ tests:
       - hasDocuments:
           count: 0
   # null deletes the key, as an older --reuse-values tree lacks it entirely.
-  - it: a missing integrationWrite map follows the gitops default (auto)
+  - it: a missing integrationWrite map follows the gitops default (false)
     set:
       cloud.defaultRbac.integrationWrite: null
     asserts:
       - hasDocuments:
-          count: 2
+          count: 0
   - it: a missing integrationWrite map stays off with a custom owner role
     set:
       cloud.defaultRbac.integrationWrite: null
@@ -108,18 +123,18 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
-  - it: a missing gitops map follows the gitops default (auto)
+  - it: a missing gitops map follows the gitops default (false)
     set:
       cloud.defaultRbac.integrationWrite.gitops: null
     asserts:
       - hasDocuments:
-          count: 2
-  - it: a missing owner key follows the gitops default (auto)
+          count: 0
+  - it: a missing owner key follows the gitops default (false)
     set:
       cloud.defaultRbac.integrationWrite.gitops.owner: null
     asserts:
       - hasDocuments:
-          count: 2
+          count: 0
   - it: respects customer-managed RBAC
     set:
       cloud.defaultRbac.create: false
@@ -157,6 +172,7 @@ tests:
           count: 0
   - it: crdGroups.all enables only the reviewed grant rows
     set:
+      cloud.defaultRbac.integrationWrite.gitops.owner: true
       rbac.crdGroups.argo: false
       rbac.crdGroups.all: true
     asserts:

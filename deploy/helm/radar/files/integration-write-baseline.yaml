@@ -8,8 +8,8 @@
 # actions lists every HTTP route and MCP tool action that needs the row, including indirect targets.
 capabilities:
   gitops:
-    # Used when cloud.defaultRbac.integrationWrite.gitops.owner is absent (e.g. --reuse-values).
-    default: auto
+    # Off by default, including when cloud.defaultRbac.integrationWrite.gitops.owner is absent (e.g. --reuse-values).
+    default: false
 entries:
   - group: "argoproj.io"
     resources: ["applications"]

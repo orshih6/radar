@@ -2,9 +2,9 @@
 Owner write add-on for integration actions, rendered from the grant rows of
 files/integration-write-baseline.yaml. Each capability has its own switch,
 cloud.defaultRbac.integrationWrite.<capability>.owner:
-  auto  - on only when ownerClusterRole is exactly admin or cluster-admin
+  false - off (default)
   true  - on with any owner role
-  false - off
+  auto  - on only when ownerClusterRole is exactly admin or cluster-admin
 An absent switch (older --reuse-values trees) follows the capability's default
 in the table. Helm's `default` would also replace an explicit false, so presence
 is checked with hasKey instead.

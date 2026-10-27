@@ -194,18 +194,21 @@ func TestIntegrationWriteOwnerSwitch(t *testing.T) {
 		editDefaults    func(map[string]interface{})
 		granted         bool
 	}{
-		{name: "auto with stock admin", granted: true},
-		{name: "auto with cluster-admin", overrides: "cloud.defaultRbac.ownerClusterRole=cluster-admin", granted: true},
-		{name: "auto with a custom owner role", overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner"},
-		{name: "auto matches the role name exactly", overrides: "cloud.defaultRbac.ownerClusterRole=admin-lite"},
+		{name: "default with stock admin"},
+		{name: "default with cluster-admin", overrides: "cloud.defaultRbac.ownerClusterRole=cluster-admin"},
+		{name: "default with a custom owner role", overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner"},
+		{name: "auto with stock admin", overrides: "cloud.defaultRbac.integrationWrite.gitops.owner=auto", granted: true},
+		{name: "auto with cluster-admin", overrides: "cloud.defaultRbac.ownerClusterRole=cluster-admin,cloud.defaultRbac.integrationWrite.gitops.owner=auto", granted: true},
+		{name: "auto with a custom owner role", overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner,cloud.defaultRbac.integrationWrite.gitops.owner=auto"},
+		{name: "auto matches the role name exactly", overrides: "cloud.defaultRbac.ownerClusterRole=admin-lite,cloud.defaultRbac.integrationWrite.gitops.owner=auto"},
 		{name: "true with a custom owner role", overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner,cloud.defaultRbac.integrationWrite.gitops.owner=true", granted: true},
-		{name: "explicit auto", overrides: "cloud.defaultRbac.integrationWrite.gitops.owner=auto", granted: true},
+		{name: "true with stock admin", overrides: "cloud.defaultRbac.integrationWrite.gitops.owner=true", granted: true},
 		{name: "false", overrides: "cloud.defaultRbac.integrationWrite.gitops.owner=false"},
 		{name: "false with cluster-admin", overrides: "cloud.defaultRbac.ownerClusterRole=cluster-admin,cloud.defaultRbac.integrationWrite.gitops.owner=false"},
-		{name: "old values missing map", editDefaults: dropMap, granted: true},
+		{name: "old values missing map", editDefaults: dropMap},
 		{name: "old values missing map, custom owner role", editDefaults: dropMap, overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner"},
-		{name: "old values missing capability", editDefaults: dropCapability, granted: true},
-		{name: "old values missing key", editDefaults: dropKey, granted: true},
+		{name: "old values missing capability", editDefaults: dropCapability},
+		{name: "old values missing key", editDefaults: dropKey},
 		{name: "old values missing map, explicit false", editDefaults: dropMap, overrides: "cloud.defaultRbac.integrationWrite.gitops.owner=false"},
 		{name: "old values missing map, explicit true", editDefaults: dropMap, overrides: "cloud.defaultRbac.ownerClusterRole=platform-owner,cloud.defaultRbac.integrationWrite.gitops.owner=true", granted: true},
 		{name: "customer-managed RBAC", overrides: "cloud.defaultRbac.create=false,cloud.defaultRbac.integrationWrite.gitops.owner=true"},
@@ -213,8 +216,8 @@ func TestIntegrationWriteOwnerSwitch(t *testing.T) {
 		{name: "OSS", overrides: "cloud.enabled=false,cloud.defaultRbac.integrationWrite.gitops.owner=true"},
 		{name: "RBAC disabled", overrides: "rbac.create=false,cloud.defaultRbac.integrationWrite.gitops.owner=true"},
 		{name: "Argo collection off", overrides: "rbac.crdGroups.argo=false,cloud.defaultRbac.integrationWrite.gitops.owner=true"},
-		{name: "Argo collection off, all on", overrides: "rbac.crdGroups.argo=false,rbac.crdGroups.all=true", granted: true},
-		{name: "member and viewer tiers off", overrides: "cloud.defaultRbac.member=false,cloud.defaultRbac.viewer=false", granted: true},
+		{name: "Argo collection off, all on", overrides: "rbac.crdGroups.argo=false,rbac.crdGroups.all=true,cloud.defaultRbac.integrationWrite.gitops.owner=true", granted: true},
+		{name: "member and viewer tiers off", overrides: "cloud.defaultRbac.member=false,cloud.defaultRbac.viewer=false,cloud.defaultRbac.integrationWrite.gitops.owner=true", granted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			docs := renderIntegrationWriteChart(t, tc.overrides, tc.editDefaults)
