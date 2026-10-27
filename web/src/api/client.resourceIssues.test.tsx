@@ -33,25 +33,27 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function setup(props: Props = {}, supported = true) {
+async function setup(props: Props = {}, supported: boolean | 'unknown' = true) {
+  let endpointSupported = supported === true
   let count = 1
   let heldReply: Promise<Response> | undefined
   const requests: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (input: string) => {
     const path = new URL(input, 'http://localhost').pathname
     requests.push(path)
+    if (path.includes('/issues/resource/') && !endpointSupported) return new Response(JSON.stringify({ error: 'unknown route' }), { status: 404 })
     if (path.includes('/issues/resource/') && heldReply) {
       const reply = heldReply
       heldReply = undefined
       return reply
     }
     const body = path.endsWith('/capabilities')
-      ? { version: supported ? 'v1.18.2' : 'v1.7.0', features: { resourceIssues: supported } }
+      ? supported === 'unknown' ? { version: 'dev', features: {} } : { version: supported ? 'v1.18.2' : 'v1.7.0', features: { resourceIssues: supported } }
       : Array.from({ length: count }, (_, index) => ({ id: String(index), message: 'Recorded failure' }))
     return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
   }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } })
-  if (!supported) client.setQueryData(['version-check', '/api'], { currentVersion: 'v1.7.0' })
+  if (supported === false) client.setQueryData(['version-check', '/api'], { currentVersion: 'v1.7.0' })
   clients.push(client)
   const host = document.createElement('div')
   document.body.append(host)
@@ -62,7 +64,7 @@ async function setup(props: Props = {}, supported = true) {
     await act(async () => { root.render(<QueryClientProvider client={client}><Probe key={next.instance} {...next} /></QueryClientProvider>) })
   }
   await render(props)
-  if (supported && props.enabled !== false) await vi.waitFor(() => expect(host.textContent).toBe('1'))
+  if (supported === true && props.enabled !== false) await vi.waitFor(() => expect(host.textContent).toBe('1'))
   const issueRequests = () => requests.filter(path => path.includes('/issues/resource/'))
   const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms) }) }
   const holdNextReply = () => {
@@ -71,7 +73,7 @@ async function setup(props: Props = {}, supported = true) {
     heldReply = new Promise(resolve => { release = () => resolve(new Response(body, { status: 200, headers: { 'Content-Type': 'application/json' } })) })
     return release
   }
-  return { client, host, root, render, advance, issueRequests, requests, holdNextReply, setCount: (value: number) => { count = value } }
+  return { client, host, root, render, advance, setEndpointSupported: (value: boolean) => { endpointSupported = value }, issueRequests, requests, holdNextReply, setCount: (value: number) => { count = value } }
 }
 
 it('clears an old Issue after a watched root changes without reopening', async () => {
@@ -211,4 +213,27 @@ it('does not duplicate an in-flight reopen when a newer root arrives', async () 
   release()
   await h.advance(10001)
   expect(h.issueRequests()).toHaveLength(reopening + 1)
+})
+
+// An unknown-version host can initially probe an endpoint before capabilities settle.
+it('does not retry an unknown-route error on focus or watch updates', async () => {
+  const h = await setup({ observation: 'first' }, 'unknown')
+  await h.advance(100)
+  expect(h.issueRequests()).toHaveLength(1)
+  focusManager.setFocused(false)
+  await act(async () => { focusManager.setFocused(true) })
+  await h.render({ observation: 'changed' })
+  await h.advance(120001)
+  expect(h.issueRequests()).toHaveLength(1)
+})
+
+it('recovers an open unsupported query when capabilities confirm support', async () => {
+  const h = await setup({ observation: 'first' }, 'unknown')
+  await h.advance(100)
+  expect(h.issueRequests()).toHaveLength(1)
+  h.setEndpointSupported(true)
+  await act(async () => { h.client.setQueryData(['capabilities'], { features: { resourceIssues: true } }) })
+  await h.advance(1)
+  expect(h.host.textContent).toBe('1')
+  expect(h.issueRequests()).toHaveLength(2)
 })
