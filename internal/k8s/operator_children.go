@@ -76,7 +76,7 @@ func operatorChildrenFromSource(source ownership.Source, fetched ownership.Obser
 		ref := resourcecontext.ContextRef{Group: r.Group, Kind: r.Kind, Namespace: r.Namespace, Name: r.Name}
 		controlled := false
 		for _, owner := range child.OwnerReferences {
-			if owner.Controller != nil && *owner.Controller && owner.UID == fetched.UID && owner.Name == fetched.Ref.Name && schema.FromAPIVersionAndKind(owner.APIVersion, owner.Kind).GroupKind() == fetched.Ref.GroupKind() {
+			if owner.Controller != nil && *owner.Controller && owner.UID == fetched.UID && owner.Name == fetched.Ref.Name && owner.Kind == fetched.Ref.Kind && schema.FromAPIVersionAndKind(owner.APIVersion, owner.Kind).Group == fetched.Ref.Group {
 				controlled = true
 				break
 			}
