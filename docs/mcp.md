@@ -1525,6 +1525,8 @@ MCP `diagnose(kind=OpenTelemetryCollector, group=opentelemetry.io, namespace=...
 
 Sidecar mode normally has no standalone Collector workload. Unmanaged Collectors can retain existing workloads. Zero replicas and no observed children are not by themselves failures. A successful reconciliation is separate from current workload readiness, which is separate from successful telemetry delivery. The web detail view shows up to three owned workloads' current status through existing resource endpoints; raw related resources remain available in other hosts and older servers. No relationship is inferred from generated names, labels or topology display edges.
 
+The child preview's `complete` applies to **all direct child kinds** within readable scope, so uncollected non-workload kinds can make it false even when all runtime workloads are known. It is not a runtime-health or workload-inventory verdict. Operator `diagnose` separately qualifies unavailable apps workload inventories. In sidecar Collector mode, no standalone owned workload is expected: the Collector runs inside annotated application Pods, whose individual diagnosis is the next step.
+
 ### Flagger root diagnosis
 
 `diagnose(kind=Canary, group=flagger.app, ...)` uses the same root event/Issue and owned-workload path. `declaredTarget` is the explicit Flagger target reference, **not** an owned child or the stable primary. It has a workload bundle for supported apps Deployments/DaemonSets, or an explicit collection error/follow-up. The stable primary appears only when currently observed as a direct owned workload; Radar never fabricates `-primary` names. This keeps the parked canary target (often zero replicas) separate from the serving primary.
