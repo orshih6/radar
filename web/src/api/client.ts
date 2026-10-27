@@ -844,9 +844,10 @@ export function useResourceIssues(
   const qs = params.toString();
   // An older Radar without the endpoint settles as unsupported, so the
   // renderers fall back to their own status-derived problem banners.
-  const { guard, gatedKey } = useRadarFeature("resourceIssues");
+  const { guard, gatedKey, support } = useRadarFeature("resourceIssues");
   const queryClient = useQueryClient();
-  const queryKey = ["issues", "resource", kind, group ?? "", namespace, name, ...gatedKey];
+  const queryKey = useMemo(() => ["issues", "resource", kind, group ?? "", namespace, name, ...gatedKey],
+    [kind, group, namespace, name, gatedKey]);
   const query = useQuery<Issue[]>({
     queryKey,
     queryFn: () => guard(() => fetchJSON<Issue[]>(`${path}${qs ? `?${qs}` : ""}`)),
@@ -855,9 +856,13 @@ export function useResourceIssues(
     // Time-based detections can change without a resource watch update.
     refetchInterval: (q) => clusterScoped || q.state.error instanceof RadarFeatureUnsupportedError ? false : 60000,
     refetchIntervalInBackground: false,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: (q) => !(q.state.error instanceof RadarFeatureUnsupportedError),
     enabled: enabled && !!kind && !!name,
   });
+  const { error, refetch } = query;
+  useEffect(() => {
+    if (enabled && kind && name && support === "supported" && error instanceof RadarFeatureUnsupportedError) void refetch();
+  }, [enabled, kind, name, support, error, refetch]);
   const identity = JSON.stringify(queryKey);
   const previous = useRef<{ identity: string; observation: string | undefined; refreshedAt: number } | null>(null);
   useEffect(() => {
@@ -883,7 +888,7 @@ export function useResourceIssues(
         refetchType: focusManager.isFocused() ? 'active' : 'none' });
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [identity, observation, enabled, kind, name, clusterScoped, queryClient, query.error, query.dataUpdatedAt]);
+  }, [identity, observation, enabled, kind, name, clusterScoped, queryClient, query.error, query.dataUpdatedAt, queryKey]);
   return query;
 }
 
