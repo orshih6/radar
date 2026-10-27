@@ -184,6 +184,9 @@ type FeatureCapabilities struct {
 	// spec.syncPolicy.automated.enabled: false. An older Radar writes an
 	// operation.rollback the API server prunes, and leaves enabled: false set.
 	ArgoRollbackSync bool `json:"argoRollbackSync"`
+	// PUT/DELETE /api/resources/{kind}/_/{name} and GET /api/audit/resource/{kind}/_/{name}
+	// read "_" as a cluster-scoped resource.
+	ClusterScopedPlaceholder bool `json:"clusterScopedPlaceholder"`
 }
 
 // WorkloadWritePermissions indicates which workload resources the user can patch.
