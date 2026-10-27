@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/skyhook-io/radar/internal/auth"
 	"github.com/skyhook-io/radar/internal/k8s"
@@ -71,12 +72,26 @@ func (s *Server) handleGitOpsCapabilities(w http.ResponseWriter, r *http.Request
 	}
 
 	review := func(ctx context.Context, attrs authv1.ResourceAttributes) (bool, error) {
-		kubeClient := k8s.GetClient()
-		if kubeClient == nil {
-			return false, fmt.Errorf("cluster client not available")
-		}
 		user := auth.UserFromContext(ctx)
-		if user != nil {
+		useToken := user != nil && pkgauth.UserTokenMode() && !user.System
+		var kubeClient kubernetes.Interface
+		if useToken {
+			if user.Token == "" {
+				return false, fmt.Errorf("user token not available")
+			}
+			var err error
+			kubeClient, err = k8s.UserClient(user)
+			if err != nil {
+				return false, err
+			}
+		} else {
+			client := k8s.GetClient()
+			if client == nil {
+				return false, fmt.Errorf("cluster client not available")
+			}
+			kubeClient = client
+		}
+		if user != nil && !useToken {
 			status, err := pkgauth.ReviewSubjectAccess(ctx, kubeClient, user.Username, user.Groups, attrs)
 			if err != nil {
 				return false, err

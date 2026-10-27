@@ -124,6 +124,10 @@ Radar treats Terminating as a distinct lifecycle phase that dominates other stat
 ## Action permissions
 
 `GET /api/gitops/capabilities/{kind}/{namespace}/{name}` reviews named API operations at their served API versions as the caller. Every action needs `patch`; actions with lifecycle preflights also need `get`.
+In user-token mode, people are checked with a `SelfSubjectAccessReview` using
+only their own token, preserving the identity the API server authenticates.
+A missing token, unavailable client, or failed review makes that permission
+check unknown, not denied. Impersonation and system identities use `SubjectAccessReview`.
 Refresh only needs `patch`, and its capability check does not read the target.
 Flux checks read the target as the caller to resolve any source reference. Flux
 Sync with source also needs `get` and `patch` on every source it reconciles,

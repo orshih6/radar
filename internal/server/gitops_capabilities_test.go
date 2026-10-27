@@ -29,6 +29,7 @@ import (
 
 	"github.com/skyhook-io/radar/internal/auth"
 	"github.com/skyhook-io/radar/internal/k8s"
+	pkgauth "github.com/skyhook-io/radar/pkg/auth"
 	"github.com/skyhook-io/radar/pkg/gitops"
 )
 
@@ -182,28 +183,55 @@ func TestWriteGitOpsPermissionDenied(t *testing.T) {
 
 func TestHandleGitOpsCapabilitiesReviewsCaller(t *testing.T) {
 	for _, tc := range []struct {
-		allowed bool
-		local   bool
-	}{{false, false}, {true, false}, {false, true}, {true, true}} {
-		allowed := tc.allowed
-		t.Run(fmt.Sprintf("allowed=%t/local=%t", allowed, tc.local), func(t *testing.T) {
-			sarCalls := 0
-			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name       string
+		allowed    bool
+		local      bool
+		tokenMode  bool
+		system     bool
+		noToken    bool
+		noConfig   bool
+		reviewFail bool
+		evaluation string
+		unknown    bool
+	}{
+		{name: "impersonation allowed", allowed: true, evaluation: "another authorizer failed"},
+		{name: "impersonation denied"},
+		{name: "local allowed", local: true, allowed: true, evaluation: "another authorizer failed"},
+		{name: "local denied", local: true},
+		{name: "token allowed", tokenMode: true, allowed: true},
+		{name: "token denied", tokenMode: true},
+		{name: "token missing", tokenMode: true, noToken: true, unknown: true},
+		{name: "token client unavailable", tokenMode: true, noConfig: true, unknown: true},
+		{name: "token review failed", tokenMode: true, reviewFail: true, unknown: true},
+		{name: "token evaluation failed", tokenMode: true, evaluation: "authorizer unavailable", unknown: true},
+		{name: "token allowed despite evaluation error", tokenMode: true, allowed: true, evaluation: "another authorizer failed"},
+		{name: "system in token mode", tokenMode: true, system: true, noToken: true, allowed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previousMode := pkgauth.CurrentCredentialMode()
+			mode := pkgauth.CredentialsImpersonate
+			if tc.tokenMode {
+				mode = pkgauth.CredentialsUserToken
+			}
+			pkgauth.SetCredentialMode(mode)
+			t.Cleanup(func() { pkgauth.SetCredentialMode(previousMode) })
+			selfReview := tc.local || (tc.tokenMode && !tc.system)
+			reviewCalls := 0
+			api := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				if r.Method == http.MethodGet {
-					t.Error("Argo capabilities should review actions without reading the target")
-					if r.Header.Get("Impersonate-User") != "alice" || r.Header.Get("Impersonate-Group") != "radar:viewer" {
-						t.Errorf("GET not impersonated: %v", r.Header)
-					}
-					json.NewEncoder(w).Encode(map[string]any{"apiVersion": "argoproj.io/v1alpha1", "kind": "Application", "metadata": map[string]any{"name": "demo", "namespace": "argocd"}})
-					return
-				}
-				path := "/apis/authorization.k8s.io/v1/subjectaccessreviews"
-				if tc.local {
-					path = "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews"
+				path, kind := "/apis/authorization.k8s.io/v1/subjectaccessreviews", "SubjectAccessReview"
+				if selfReview {
+					path, kind = "/apis/authorization.k8s.io/v1/selfsubjectaccessreviews", "SelfSubjectAccessReview"
 				}
 				if r.Method != http.MethodPost || r.URL.Path != path {
 					t.Errorf("unexpected review request: %s %s", r.Method, r.URL.Path)
+				}
+				wantToken := "Bearer sa-token"
+				if tc.tokenMode && !tc.system {
+					wantToken = "Bearer alice-token"
+				}
+				if r.Header.Get("Authorization") != wantToken || r.Header.Get("Impersonate-User") != "" || len(r.Header.Values("Impersonate-Group")) != 0 {
+					t.Errorf("wrong review credentials: %v", r.Header)
 				}
 				var review authv1.SubjectAccessReview
 				if err := json.NewDecoder(r.Body).Decode(&review); err != nil {
@@ -211,35 +239,37 @@ func TestHandleGitOpsCapabilitiesReviewsCaller(t *testing.T) {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				sarCalls++
-				if tc.local && (review.Spec.User != "" || len(review.Spec.Groups) != 0) {
+				reviewCalls++
+				if selfReview && (review.Spec.User != "" || len(review.Spec.Groups) != 0) {
 					t.Errorf("SSAR supplied a subject: %+v", review.Spec)
 				}
-				a := review.Spec.ResourceAttributes
-				if !tc.local && (review.Spec.User != "alice" || len(review.Spec.Groups) != 2 || review.Spec.Groups[0] != "radar:viewer" || review.Spec.Groups[1] != "system:authenticated") {
+				if !selfReview && (review.Spec.User != "alice" || !slices.Equal(review.Spec.Groups, []string{"radar:viewer", "system:authenticated"})) {
 					t.Errorf("wrong caller identity: %+v", review.Spec)
 				}
-				if a.Version != "v1alpha1" || a.Name != "demo" || a.Namespace != "argocd" || a.Resource != "applications" || a.Group != "argoproj.io" || (a.Verb != "patch" && a.Verb != "get") {
-					t.Errorf("wrong caller SAR: %+v", review.Spec)
+				a := review.Spec.ResourceAttributes
+				if a == nil || a.Version != "v1alpha1" || a.Name != "demo" || a.Namespace != "argocd" || a.Resource != "applications" || a.Group != "argoproj.io" || (a.Verb != "patch" && a.Verb != "get") {
+					t.Errorf("wrong review attributes: %+v", a)
 				}
-				review.TypeMeta = metav1.TypeMeta{APIVersion: "authorization.k8s.io/v1", Kind: "SubjectAccessReview"}
-				if tc.local {
-					review.Kind = "SelfSubjectAccessReview"
+				if tc.reviewFail {
+					http.Error(w, "review unavailable", http.StatusForbidden)
+					return
 				}
-				review.Status.Allowed = allowed && a.Version == "v1alpha1"
-				if allowed {
-					review.Status.EvaluationError = "another authorizer failed"
-				}
+				review.TypeMeta = metav1.TypeMeta{APIVersion: "authorization.k8s.io/v1", Kind: kind}
+				review.Status.Allowed = tc.allowed
+				review.Status.EvaluationError = tc.evaluation
 				json.NewEncoder(w).Encode(review)
 			}))
 			defer api.Close()
-			config := &rest.Config{Host: api.URL, ContentConfig: rest.ContentConfig{ContentType: "application/json", AcceptContentTypes: "application/json"}}
-			previousConfig := k8s.SetTestConfig(config)
-			defer k8s.SetTestConfig(previousConfig)
+			config := &rest.Config{Host: api.URL, BearerToken: "sa-token", TLSClientConfig: rest.TLSClientConfig{Insecure: true}, ContentConfig: rest.ContentConfig{ContentType: "application/json", AcceptContentTypes: "application/json"}}
 			client, err := kubernetes.NewForConfig(config)
 			if err != nil {
 				t.Fatal(err)
 			}
+			if tc.noConfig {
+				config = nil
+			}
+			previousConfig := k8s.SetTestConfig(config)
+			defer k8s.SetTestConfig(previousConfig)
 			previousClient := k8s.SetTestClient(client)
 			defer k8s.SetTestClient(previousClient)
 			previousConnection := k8s.GetConnectionStatus()
@@ -247,7 +277,11 @@ func TestHandleGitOpsCapabilitiesReviewsCaller(t *testing.T) {
 			defer k8s.SetConnectionStatus(previousConnection)
 			router := chi.NewRouter()
 			router.Get("/gitops/capabilities/{kind}/{namespace}/{name}", (&Server{}).handleGitOpsCapabilities)
-			request := requestWithUser(http.MethodGet, "/gitops/capabilities/applications/argocd/demo", &auth.User{Username: "alice", Groups: []string{"radar:viewer"}})
+			user := &auth.User{Username: "alice", Groups: []string{"radar:viewer"}, System: tc.system}
+			if !tc.noToken {
+				user.Token = "alice-token"
+			}
+			request := requestWithUser(http.MethodGet, "/gitops/capabilities/applications/argocd/demo", user)
 			if tc.local {
 				request = httptest.NewRequest(http.MethodGet, "/gitops/capabilities/applications/argocd/demo", nil)
 			}
@@ -259,8 +293,21 @@ func TestHandleGitOpsCapabilitiesReviewsCaller(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
-			if w.Code != 200 || sarCalls != 2 || *body.Actions["refresh"].Allowed != allowed {
-				t.Fatalf("response=%d %s SAR calls=%d", w.Code, w.Body, sarCalls)
+			wantCalls := 2
+			if tc.noConfig || (tc.tokenMode && !tc.system && tc.noToken) {
+				wantCalls = 0
+			}
+			if w.Code != 200 || reviewCalls != wantCalls || len(body.Actions) != 7 {
+				t.Fatalf("response=%d %s review calls=%d, want %d", w.Code, w.Body, reviewCalls, wantCalls)
+			}
+			for name, action := range body.Actions {
+				if tc.unknown {
+					if action.Allowed != nil || len(action.Denied) != 0 || action.Reason != unknownPermissionReason {
+						t.Errorf("%s should stay unknown: %+v", name, action)
+					}
+				} else if action.Allowed == nil || *action.Allowed != tc.allowed {
+					t.Errorf("%s: %+v, want allowed=%t", name, action, tc.allowed)
+				}
 			}
 		})
 	}
