@@ -41,7 +41,7 @@ async function setup(props: Props = {}, supported: boolean | 'unknown' = true) {
   vi.stubGlobal('fetch', vi.fn(async (input: string) => {
     const path = new URL(input, 'http://localhost').pathname
     requests.push(path)
-    if (path.includes('/issues/resource/') && !endpointSupported) return new Response(JSON.stringify({ error: 'unknown route' }), { status: 404 })
+    if (path.includes('/issues/resource/') && !endpointSupported) return new Response('404 page not found\n', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
     if (path.includes('/issues/resource/') && heldReply) {
       const reply = heldReply
       heldReply = undefined
