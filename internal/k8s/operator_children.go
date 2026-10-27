@@ -15,12 +15,19 @@ import (
 // workload selection. Unwatched unrelated CRDs do not make apps workloads
 // unknown, and hundreds of ConfigMaps cannot displace a runtime bundle.
 type OperatorChildren struct {
-	Context           *resourcecontext.ChildrenContext
-	Workloads         []resourcecontext.ContextRef // first four: diagnose shows three
-	WorkloadsComplete bool                         // within the caller-readable scope
-	Unavailable       string
+	Context   *resourcecontext.ChildrenContext
+	Workloads []resourcecontext.ContextRef // first four: diagnose shows three
+	// WorkloadsComplete means all three apps workload inventories were readable
+	// and checked. Workloads itself remains a bounded sample.
+	WorkloadsComplete bool
+	// Unavailable is a readreason code for a discarded observation; consumers
+	// project it as the generic omitted reason unavailable. Empty means usable.
+	Unavailable string
 }
 
+// OperatorChildrenForObject returns nil for unsupported kinds, or a nonnil
+// unavailable observation when current ownership could not be established.
+// access must be nonnil and authorize reads within the session catalog.
 func OperatorChildrenForObject(obj runtime.Object, access func(*ownership.Catalog) ownership.Access) *OperatorChildren {
 	if obj == nil {
 		return nil

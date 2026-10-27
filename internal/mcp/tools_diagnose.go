@@ -42,8 +42,8 @@ type diagnoseCommonInput struct {
 	Probe     bool   `json:"probe,omitempty" jsonschema:"active reachability test for network entry kinds: when true, augment the static trace with DNS/TCP/TLS/HTTP probes as applicable. Explicitly non-HTTP Service ports stop at TCP; Radar does not send them an unrelated HTTP request. Uses direct TCP when radar is in-cluster, K8s API server proxy from a laptop - the same call works either way. Probes can escalate the static verdict when failures are unanimous on a hop, but never soften broken or unknown. Probe failures attributable to the vantage (e.g. NetworkPolicy blocking radar's path) can produce false-positive escalations; the per-hop chip carries the granular signal. Costs 0-3s wall time. No effect for non-network kinds."`
 	Namespace string `json:"namespace" jsonschema:"resource namespace"`
 	Name      string `json:"name" jsonschema:"resource name"`
-	Container string `json:"container,omitempty" jsonschema:"specific container; defaults to all containers across the workload's pods"`
-	TailLines int    `json:"tail_lines,omitempty" jsonschema:"lines per pod/container per stream (current AND previous), default 100"`
+	Container string `json:"container,omitempty" jsonschema:"container name for every selected workload; omit for all; diagnose a child to narrow"`
+	TailLines int    `json:"tail_lines,omitempty" jsonschema:"log tail per pod/container/stream in each selected workload; default 100, max 1000"`
 	Since     string `json:"since,omitempty" jsonschema:"only fetch logs newer than this duration (e.g. 30s, 10m, 1h); empty = full available history"`
 }
 
@@ -89,7 +89,7 @@ type diagnoseResponse struct {
 	// the failure mode, spanning the whole pre-Running path: unschedulable pods
 	// (offending node constraint named), admission rejections (quota/
 	// PodSecurity/webhook — where no Pod is created), or post-bind CNI/volume
-	// stalls. Empty when the workload starts fine. Named for the symptom
+	// stalls. Empty may also mean withheld evidence (see Warnings). Named for the symptom
 	// ("can't start"), not the subsystem — "scheduling" alone would mislead,
 	// since it also covers admission and post-bind.
 	StartupBlockers []startupBlocker `json:"startupBlockers,omitempty"`
@@ -97,7 +97,7 @@ type diagnoseResponse struct {
 	// object: the grouped issues whose subject OR an affected member is the
 	// diagnosed resource (crashloop, missing refs, HPA can't-scale, GitOps
 	// failure, …). Saves the agent re-deriving from raw logs/events what the
-	// issue engine knows. Empty when nothing is wrong.
+	// issue engine knows. Empty may also mean withheld evidence (see Warnings).
 	RelatedIssues []issues.Issue           `json:"relatedIssues,omitempty"`
 	ChangeContext *issuesapi.ChangeContext `json:"changeContext,omitempty"`
 	RecentChanges []issuesapi.RecentChange `json:"recentChanges,omitempty"`
