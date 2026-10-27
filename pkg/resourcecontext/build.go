@@ -45,9 +45,6 @@ type Options struct {
 	// host. A connection change discards the whole observation.
 	AutoInstrumentation            *AutoInstrumentationContext
 	AutoInstrumentationUnavailable bool
-	Reflections                    ReflectionLookup
-	Tier                           ContextTier
-
 	// AccessChecker gates every emitted ContextRef. nil = no gating (treat
 	// as fully authorized — local-kubeconfig / tests).
 	AccessChecker RefAccessChecker
