@@ -58,3 +58,10 @@ it('shows an explicit partial workload preview when an apps inventory is unavail
   read.mockReturnValue({ isLoading: true })
   expect(renderToStaticMarkup(<OpenTelemetryCollectorRenderer data={root} />)).toContain('Reading owned workloads')
 })
+
+it('pauses root and child reads while the resource view is inactive', () => {
+  read.mockImplementation((kind: string) => kind === 'opentelemetrycollectors' ? { relationships: { children: [reference], ownership: { children: { complete: true } } } } : { data: workload })
+  renderToStaticMarkup(<OpenTelemetryCollectorRenderer data={root} active={false} />)
+  expect(read).toHaveBeenCalledTimes(2)
+  for (const call of read.mock.calls) expect(call[4]).toMatchObject({ enabled: false, refetchInterval: false })
+})
