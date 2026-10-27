@@ -16,7 +16,7 @@ const fetcher = vi.fn((input: RequestInfo | URL) => String(input).includes('/git
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  client.setQueryData(['capabilities'], { features: { gitOpsActionCapabilities: true } })
+  client.setQueryData(['capabilities'], { features: { gitopsActionCapabilities: true } })
   answer = () => new Promise<Response>(() => {})
   fetcher.mockClear()
   vi.stubGlobal('fetch', fetcher)

@@ -172,7 +172,7 @@ func TestFluxSyncChainPermissionDenials(t *testing.T) {
 				}
 				var partial *PartialSyncError
 				wantPartial := verb == "patch" && target.kind != "HelmRepository"
-				if errors.Is(err, ErrSourcesReconciled) != wantPartial || errors.As(err, &partial) != wantPartial {
+				if errors.As(err, &partial) != wantPartial {
 					t.Fatalf("partial requests missing or unexpected: %v", err)
 				}
 				if wantPartial {
@@ -210,7 +210,7 @@ func TestFluxSyncPartialSourceFailure(t *testing.T) {
 			client.PrependReactor("patch", "helmcharts", func(ktesting.Action) (bool, runtime.Object, error) { return true, nil, failure })
 			_, err := SyncFluxWithSource(context.Background(), client, "helmrelease", "apps", "demo")
 			var partial *PartialSyncError
-			if !errors.Is(err, ErrSourcesReconciled) || !errors.Is(err, failure) || !errors.As(err, &partial) {
+			if !errors.Is(err, failure) || !errors.As(err, &partial) {
 				t.Fatalf("lost partial effect or leaf error: %v", err)
 			}
 			if want := []SourceRef{{Kind: "HelmRepository", Namespace: "charts", Name: "repo"}}; !slices.Equal(partial.Requested, want) {

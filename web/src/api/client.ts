@@ -6920,7 +6920,7 @@ type CachedGitOpsActionCapabilities = GitOpsActionCapabilities & {
 export function useGitOpsActionCapabilities(kind: string, group: string | undefined, namespace: string, name: string, enabled = true) {
   const active = enabled && isGitOpsActionTarget(kind, group);
   const queryClient = useQueryClient();
-  const { support, guard, gatedKey } = useRadarFeature("gitOpsActionCapabilities");
+  const { support, guard, gatedKey } = useRadarFeature("gitopsActionCapabilities");
   const queryKey = ["gitops-action-capabilities", getApiBase(), kind, group, namespace, name, ...gatedKey];
   const [, setExpiryTime] = useState(0);
   const query = useQuery<CachedGitOpsActionCapabilities>({
@@ -6959,7 +6959,7 @@ export function useGitOpsActionCapabilities(kind: string, group: string | undefi
         : capability,
     ])),
   };
-  const featureUnsupported = isRadarFeatureUnsupported(query.error, 'gitOpsActionCapabilities');
+  const featureUnsupported = isRadarFeatureUnsupported(query.error, 'gitopsActionCapabilities');
   const permissions = active ? gitOpsActionPermissions(support, data, featureUnsupported) : undefined;
   const permissionCheckUnavailable = active && support !== 'unsupported' && !featureUnsupported && (
     (!data && query.isError) || Object.values(permissions ?? {}).some(capability => capability.allowed === undefined && !capability.unsupported && !!capability.reason)

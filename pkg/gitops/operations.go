@@ -64,9 +64,6 @@ var (
 	ErrResourceSuspended = errors.New("resource is suspended")
 	// ErrSyncWithSourceUnsupported means there is no reconcilable source. HTTP 400.
 	ErrSyncWithSourceUnsupported = errors.New("sync with source is not supported for this resource")
-	// ErrSourcesReconciled marks a sync-with-source whose sources were patched
-	// before a later patch failed, so callers can report the partial requests.
-	ErrSourcesReconciled = errors.New("source reconcile already requested")
 )
 
 // PartialSyncError records accepted reconcile requests, not controller completion.
@@ -75,9 +72,8 @@ type PartialSyncError struct {
 	Err       error
 }
 
-func (e *PartialSyncError) Error() string        { return e.Err.Error() + ". " + e.Note() }
-func (e *PartialSyncError) Unwrap() error        { return e.Err }
-func (e *PartialSyncError) Is(target error) bool { return target == ErrSourcesReconciled }
+func (e *PartialSyncError) Error() string { return e.Err.Error() + ". " + e.Note() }
+func (e *PartialSyncError) Unwrap() error { return e.Err }
 func (e *PartialSyncError) Note() string {
 	objects := make([]string, 0, len(e.Requested))
 	for _, ref := range e.Requested {

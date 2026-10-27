@@ -167,11 +167,18 @@ export interface GitOpsDetailLayoutProps {
   isFlux: boolean
   isFluxWorkload: boolean  // Kustomization | HelmRelease — gates the
                             // "Sync with source" button
+  /**
+   * Buttons gate on these capability action keys: selective sync → `sync`,
+   * hard refresh → `refresh`, resource validation → `validate`, Flux source chain → `sync-with-source`.
+   * A non-empty string disables with that reason; absent or empty means not restricted.
+   */
   actionDisabledReasons?: Record<string, string | undefined>
   permissionCheckUnavailable?: boolean
-  // Per-action permission results. `denied` lists every operation the caller
-  // lacks; `unsupported` actions are disabled through actionDisabledReasons
-  // but are not role restrictions.
+  /**
+   * Explanatory data for the restriction panel, keyed like actionDisabledReasons;
+   * buttons gate on actionDisabledReasons. Denied lists operations checked and denied;
+   * a denied read can hide later Flux source hops. Unsupported actions are not role restrictions.
+   */
   actionPermissions?: Record<string, {
     allowed?: boolean
     unsupported?: boolean

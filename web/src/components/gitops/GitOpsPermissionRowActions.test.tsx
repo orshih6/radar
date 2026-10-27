@@ -25,7 +25,7 @@ beforeEach(async () => {
   answer = () => new Promise<Response>(() => {})
   vi.stubGlobal('fetch', requests)
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  client.setQueryData(['capabilities'], { features: { gitOpsActionCapabilities: true } })
+  client.setQueryData(['capabilities'], { features: { gitopsActionCapabilities: true } })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)

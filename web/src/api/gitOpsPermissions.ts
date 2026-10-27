@@ -3,9 +3,14 @@ import { gitOpsDenialMessage, type GitOpsPermission } from '@skyhook-io/k8s-ui/u
 import type { ErrorBody } from './httpErrors'
 import type { RadarFeatureSupport } from './radarFeatures'
 
+/**
+ * Four answer forms: {allowed:true}, {allowed:false, denied:[…]},
+ * {reason} (unknown after a failed or expired check; permit an attempt),
+ * or {unsupported:true, reason}.
+ */
 export interface GitOpsActionCapability {
   allowed?: boolean
-  /** Every operation the caller is denied, so grant guidance is complete. */
+  /** Operations checked and denied; a denied read can hide later Flux source hops, so this may omit missing grants. */
   denied?: GitOpsPermission[]
   /** The action can't run on this object whatever the caller's role. */
   unsupported?: boolean
@@ -13,6 +18,7 @@ export interface GitOpsActionCapability {
 }
 
 export interface GitOpsActionCapabilities {
+  /** Selective sync uses `sync`, hard refresh uses `refresh`, resource validation uses `validate`, and the Flux source chain uses `sync-with-source`. */
   actions: Record<string, GitOpsActionCapability>
 }
 

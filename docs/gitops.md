@@ -132,10 +132,21 @@ Refresh only needs `patch`, and its capability check does not read the target.
 Flux checks read the target as the caller to resolve any source reference. Flux
 Sync with source also needs `get` and `patch` on every source it reconciles,
 including each namespace: a HelmRelease using a HelmChart needs both the chart
-and its upstream repository. ExternalArtifact is not read or patched. Each action reports `allowed`; a denied action lists
-every operation the caller lacks in `denied` (`{verb, group, resource, namespace, name, kind, source}`),
-so the grant guidance is complete, and each distinct operation is reviewed once
-per request. A Flux target the caller can't read denies every action on that
+and its upstream repository. ExternalArtifact is not read or patched. Capability action keys map selective sync to
+`sync`, hard refresh to `refresh`, resource validation to `validate`, and the Flux
+source chain to `sync-with-source`.
+
+Each action has one of four answer forms:
+
+- `{allowed:true}`: the required, known API operations passed permission checks.
+- `{allowed:false, denied:[…]}`: operations checked and denied, as
+  `{verb, group, resource, namespace, name, kind, source}` tuples. A denied read
+  can prevent discovering later Flux source hops, so this is not guaranteed to
+  list every missing grant. `source:true` marks a Flux source the action also reconciles.
+- `{reason}`: unknown because a check failed or expired; permit an attempt.
+- `{unsupported:true, reason}`: the action cannot run on this object regardless of role.
+
+Each distinct operation is reviewed once per request. A Flux target the caller can't read denies every action on that
 read and still reports a missing `patch`. Sync with source on an object with no source Radar can reconcile
 (for example, a Kustomization without `sourceRef`)
 reports `unsupported` with a reason, and the action itself answers 400.
@@ -148,7 +159,7 @@ without disabling the unknown actions; initial loading and closed rows show no n
 denied actions expose their reason on touch and through an accessible description
 before focus. Lifecycle restrictions still apply; Refresh and
 Terminate remain available during deletion when permitted.
-A connected Radar without the `gitOpsActionCapabilities` feature flag retains
+A connected Radar without the `gitopsActionCapabilities` feature flag retains
 its existing action controls.
 
 GitOps action denials return HTTP 403 with

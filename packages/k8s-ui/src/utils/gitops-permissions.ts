@@ -1,4 +1,4 @@
-/** One API operation a GitOps action performs; `source` marks a Flux source reconciled alongside the target. */
+/** One API operation a GitOps action performs. */
 export interface GitOpsPermission {
   verb: string
   group?: string
@@ -6,6 +6,7 @@ export interface GitOpsPermission {
   namespace: string
   name?: string
   kind?: string
+  /** True when the tuple is for a Flux source the action also reconciles. */
   source?: boolean
 }
 

@@ -162,7 +162,7 @@ export interface CloudConnectCapability {
 }
 
 export interface FeatureCapabilities {
-  gitOpsActionCapabilities?: boolean
+  gitopsActionCapabilities?: boolean
  helmSourceIdentity?: boolean
   resourceReadCoverage?: boolean
   searchCoverage?: boolean

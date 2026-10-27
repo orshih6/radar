@@ -24,8 +24,7 @@ import (
 
 const unknownPermissionReason = "Couldn't check your permissions — retrying"
 
-// gitOpsPermission is one API operation an action performs. Source marks a
-// Flux source the action reconciles alongside its target.
+// gitOpsPermission is one API operation an action performs.
 type gitOpsPermission struct {
 	Verb      string `json:"verb"`
 	Group     string `json:"group"`
@@ -34,12 +33,17 @@ type gitOpsPermission struct {
 	Namespace string `json:"namespace"`
 	Name      string `json:"name,omitempty"`
 	Kind      string `json:"kind,omitempty"`
-	Source    bool   `json:"source,omitempty"`
+	// Source is true when the tuple is for a Flux source the action also reconciles.
+	Source bool `json:"source,omitempty"`
 }
 
-// gitOpsActionCapability is allowed, denied (with every denied operation, so
-// the grant guidance is complete), unknown (Allowed nil, Reason set), or
-// unsupported for this object.
+// gitOpsActionCapability has four answer forms: {allowed:true},
+// {allowed:false, denied:[…]}, {reason} (unknown after a failed or expired check;
+// permit an attempt), or {unsupported:true, reason}.
+// Denied lists operations checked and denied, not necessarily every missing grant:
+// a denied read can prevent discovering later Flux source hops.
+// Action map keys use sync for selective sync, refresh for hard refresh, validate
+// for resource validation, and sync-with-source for the Flux source chain.
 type gitOpsActionCapability struct {
 	Allowed     *bool              `json:"allowed,omitempty"`
 	Denied      []gitOpsPermission `json:"denied,omitempty"`
