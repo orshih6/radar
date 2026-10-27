@@ -1082,7 +1082,7 @@ func TestBuildHistoryArgo_MultiSourceEntry(t *testing.T) {
 		}
 	}
 	entry := hist[1]
-	if !entry.MultiSource {
+	if !entry.RollbackMultiSourceWarning {
 		t.Error("multi-source history must carry the controller compatibility warning")
 	}
 	if entry.ID != "0" || entry.Source != "https://github.com/org/app · guestbook (+1 more)" {
@@ -2331,8 +2331,22 @@ func TestBuildHistoryArgoMultiSourceWarning(t *testing.T) {
 				_ = unstructured.SetNestedSlice(root.Object, []any{map[string]any{"path": "current"}}, "spec", "sources")
 			}
 			history := BuildHistory(root)
-			if len(history) != 1 || history[0].MultiSource != tc.want {
-				t.Fatalf("history = %+v, want multiSource=%v", history, tc.want)
+			if len(history) != 1 || history[0].RollbackMultiSourceWarning != tc.want {
+				t.Fatalf("history = %+v, want rollbackMultiSourceWarning=%v", history, tc.want)
+			}
+			encoded, err := json.Marshal(history[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]any
+			if err := json.Unmarshal(encoded, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if got, present := fields["rollbackMultiSourceWarning"]; present != tc.want || (present && got != true) {
+				t.Fatalf("history JSON = %s, want rollbackMultiSourceWarning present=%v and true", encoded, tc.want)
+			}
+			if _, present := fields["multiSource"]; present {
+				t.Fatalf("history JSON retains the old warning key: %s", encoded)
 			}
 		})
 	}

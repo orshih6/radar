@@ -26,14 +26,14 @@ export interface RollbackDialogProps {
   historyId?: string
   source?: string
   // Either the current Application or the selected entry uses plural sources.
-  multiSource?: boolean
+  multiSourceWarning?: boolean
   pending?: boolean
   blockedReason?: string
   onCancel: () => void
   onConfirm: (opts: { prune: boolean; dryRun: boolean }) => void
 }
 
-export function RollbackDialog({ open, appLabel, revision, historyId, source, multiSource, pending, blockedReason, onCancel, onConfirm }: RollbackDialogProps) {
+export function RollbackDialog({ open, appLabel, revision, historyId, source, multiSourceWarning, pending, blockedReason, onCancel, onConfirm }: RollbackDialogProps) {
   const titleId = useId()
   const [prune, setPrune] = useState(false)
   const [dryRun, setDryRun] = useState(false)
@@ -57,7 +57,7 @@ export function RollbackDialog({ open, appLabel, revision, historyId, source, mu
             ? 'Argo will preview syncing this application to a previous revision without applying changes.'
             : 'Argo will sync this application to a previous revision. Auto-sync is off. Later changes can still cause drift. Syncing or enabling auto-sync deploys the current revision and can undo the rollback.'}
         </div>
-        {multiSource && (
+        {multiSourceWarning && (
           <p className="text-xs text-warning-text">
             On Argo CD before 2.12, rolling back across a single-source/multi-source change or to a multi-source entry can deploy the wrong revisions or render nothing; with prune, it can delete resources.
           </p>

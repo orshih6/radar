@@ -1107,9 +1107,9 @@ export function GitOpsChangesView({ insight, error, onOpenResource, onSyncResour
                 const rowKey = refKey(change.ref)
                 const focused = focusKey === rowKey
                 const explanation = change.missing
-                  ? missingResourceMessage(change.sync, rolledBack)
+                  ? missingResourceMessage(change.sync, { rolledBack })
                   : !change.syncError && !change.message
-                    ? explainChangeStatus(change.sync, change.health, insight.summary, rolledBack)
+                    ? explainChangeStatus(change.sync, change.health, insight.summary, { rolledBack })
                     : ''
                 const hasInlineDetail = !!(
                   (change.drift && change.drift.entries.length > 0) ||
@@ -1284,8 +1284,9 @@ function explainChangeStatus(
   sync: string | undefined,
   health: string | undefined,
   summary: GitOpsInsight['summary'],
-  rolledBack: boolean,
+  context?: { hazard?: string; rolledBack?: boolean },
 ): string {
+  if (context?.hazard && (sync === 'OutOfSync' || health === 'Missing')) return 'See the sync warning above before syncing this Application.'
   const isAuto = (summary.autoSyncMode ?? '').toLowerCase().startsWith('auto')
   const phase = (summary.operationPhase ?? '').toLowerCase()
   const inFlight = phase === 'running'
@@ -1297,13 +1298,13 @@ function explainChangeStatus(
   if (sync === 'OutOfSync') {
     if (parentFailed) return 'Sync failed for this resource — see the operation error above for the cause.'
     if (inFlight) return 'Live state differs from Git. A sync is in progress — wait for it to finish.'
-    if (rolledBack) return 'Live state differs from Git after a rollback. Sync applies the desired state and can undo the rollback.'
+    if (context?.rolledBack) return 'Live state differs from Git after a rollback. Sync applies the desired state and can undo the rollback.'
     if (isAuto) return 'Live state differs from Git. Auto-sync should reconcile this within a few minutes; click Sync to force it.'
     return 'Live state differs from Git. Click Sync to apply the desired state.'
   }
   if (health === 'Missing' && parentFailed) return 'Resource was not created — see the operation error above for the cause.'
   if (health === 'Degraded') return 'Resource reports an unhealthy state. Open the resource for events and logs.'
-  if (health === 'Missing') return rolledBack
+  if (health === 'Missing') return context?.rolledBack
     ? 'Declared in Git but not present in the cluster after a rollback. Sync can recreate it and undo the rollback.'
     : 'Declared in Git but not present in the cluster. Sync to create it.'
   if (health === 'Progressing') return 'Resource is mid-rollout (e.g. pods coming up). Should converge shortly.'

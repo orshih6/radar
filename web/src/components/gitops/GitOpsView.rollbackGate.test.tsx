@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => ({
   resume: vi.fn(),
   onResume: undefined as undefined | (() => void),
   showError: vi.fn(),
-  multiSource: undefined as boolean | undefined,
+  multiSourceWarning: undefined as boolean | undefined,
   source: undefined as string | undefined,
   confirm: undefined as undefined | ((opts: { prune: boolean; dryRun: boolean }) => void),
 }))
@@ -46,12 +46,12 @@ vi.mock('@skyhook-io/k8s-ui', async (importOriginal) => {
       </div>
     },
     GitOpsActivityInsightView: (props: { onRollback?: (item: GitOpsHistoryItem) => void; rollbackUpgrade?: unknown; rollbackBlockedReason?: string }) => (
-      <div>{props.rollbackBlockedReason}<button type="button" disabled={!!props.rollbackUpgrade || !!props.rollbackBlockedReason} onClick={() => props.onRollback?.({ id: '0', revision: 'aaa111', source: 'guestbook (+1 more)', multiSource: true })}>Rollback</button></div>
+      <div>{props.rollbackBlockedReason}<button type="button" disabled={!!props.rollbackUpgrade || !!props.rollbackBlockedReason} onClick={() => props.onRollback?.({ id: '0', revision: 'aaa111', source: 'guestbook (+1 more)', rollbackMultiSourceWarning: true })}>Rollback</button></div>
     ),
-    RollbackDialog: (props: { open: boolean; source?: string; multiSource?: boolean; onConfirm: (opts: { prune: boolean; dryRun: boolean }) => void }) => {
+    RollbackDialog: (props: { open: boolean; source?: string; multiSourceWarning?: boolean; onConfirm: (opts: { prune: boolean; dryRun: boolean }) => void }) => {
       if (props.open) {
         harness.confirm = props.onConfirm
-        harness.multiSource = props.multiSource
+        harness.multiSourceWarning = props.multiSourceWarning
         harness.source = props.source
       }
       return props.open ? <div role="dialog">Roll back?</div> : null
@@ -95,7 +95,7 @@ beforeEach(async () => {
   harness.rollback.mockClear()
   harness.showError.mockClear()
   harness.confirm = undefined
-  harness.multiSource = undefined
+  harness.multiSourceWarning = undefined
   harness.source = undefined
   // /api/capabilities and /version-check stay pending until a test answers.
   vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})))
@@ -151,7 +151,7 @@ it('passes the selected multi-source history entry to the rollback confirmation'
   await act(async () => { client.setQueryData(['capabilities'], { features: { argoRollbackSync: true } }) })
   await settle()
   await act(async () => rollbackButton().click())
-  expect(harness.multiSource).toBe(true)
+  expect(harness.multiSourceWarning).toBe(true)
   expect(harness.source).toBe('guestbook (+1 more)')
 })
 

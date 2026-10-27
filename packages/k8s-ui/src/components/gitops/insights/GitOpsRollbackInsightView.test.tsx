@@ -62,3 +62,12 @@ it('keeps Missing rows rollback-aware when sync is Unknown and no RolledBack iss
   expect(html).toContain('Declared in Git but not present in the cluster after a rollback. Sync can recreate it and undo the rollback.')
   expect(html).not.toContain('Sync the application to create it.')
 })
+
+it('keeps Missing health explanations rollback-aware without a confirmed missing lookup', () => {
+  const data = insight(true)
+  data.changes![0].sync = 'Unknown'
+  data.changes![0].health = 'Missing'
+  const html = renderToString(<GitOpsChangesView insight={data} />)
+  expect(html).toContain('Declared in Git but not present in the cluster after a rollback. Sync can recreate it and undo the rollback.')
+  expect(html).not.toContain('Declared in Git but not present in the cluster. Sync to create it.')
+})
