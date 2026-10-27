@@ -3,6 +3,8 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	corev1 "k8s.io/api/core/v1"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,5 +84,54 @@ func TestOwnedWorkloadBundleRequiresCurrentControllerUID(t *testing.T) {
 	u.OwnerReferences[0].Controller = nil
 	if ownedByOperator(u, root) {
 		t.Fatal("non-controller ownership attributed as runtime")
+	}
+}
+
+func TestOperatorDiagnoseWithholdsDeniedPodAndEventEvidence(t *testing.T) {
+	for _, podAllowed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "pods-denied", true: "pods-readable"}[podAllowed], func(t *testing.T) {
+			yes := true
+			root := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "opentelemetry.io/v1beta1", "kind": "OpenTelemetryCollector", "metadata": map[string]any{"name": "collector", "namespace": "observe", "uid": "root"}}}
+			child := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "runtime", Namespace: "observe", UID: "runtime", OwnerReferences: []metav1.OwnerReference{{APIVersion: "opentelemetry.io/v1beta1", Kind: "OpenTelemetryCollector", Name: "collector", UID: "root", Controller: &yes}}}, Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "runtime"}}}}
+			rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "runtime-rs", Namespace: "observe", UID: "rs", OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: "runtime", UID: "runtime", Controller: &yes}}}, Spec: appsv1.ReplicaSetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "runtime"}}}}
+			pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "restricted-pod-marker", Namespace: "observe", UID: "pod", Labels: map[string]string{"app": "runtime"}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "runtime-rs", UID: "rs", Controller: &yes}}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}}}
+			event := &corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: "private-event", Namespace: "observe"}, Type: "Warning", Reason: "FailedCreate", Message: "restricted-event-marker", InvolvedObject: corev1.ObjectReference{APIVersion: "apps/v1", Kind: "ReplicaSet", Namespace: "observe", Name: "runtime-rs", UID: "rs"}}
+			initOperatorDiagnosisCache(t, root, child, rs, pod, event)
+			ctx := withTestUserPerms(t, "operator-reader", nil, []string{"observe"})
+			perms := getPermCache().Get("operator-reader", nil)
+			perms.SetCanI("get", "opentelemetry.io", "opentelemetrycollectors", "observe", true)
+			for _, verb := range []string{"get", "list"} {
+				for _, resource := range []string{"deployments", "replicasets"} {
+					perms.SetCanI(verb, "apps", resource, "observe", true)
+				}
+				perms.SetCanI(verb, "", "pods", "observe", podAllowed)
+				perms.SetCanI(verb, "", "events", "observe", false)
+			}
+			result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("opentelemetrycollector", "observe", "collector"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := extractText(t, result)
+			if strings.Contains(text, "restricted-event-marker") {
+				t.Fatalf("denied event leaked: %s", text)
+			}
+			if !podAllowed && strings.Contains(text, "restricted-pod-marker") {
+				t.Fatalf("denied Pod leaked: %s", text)
+			}
+			var got operatorDiagnoseResponse
+			if err := json.Unmarshal([]byte(text), &got); err != nil {
+				t.Fatal(err)
+			}
+			if len(got.OwnedWorkloads) != 1 || got.OwnedWorkloads[0].Diagnosis == nil {
+				t.Fatalf("readable workload lost its partial bundle: %s", text)
+			}
+			bundle := got.OwnedWorkloads[0].Diagnosis
+			if bundle.EventsError == "" || len(bundle.Events) > 0 || len(bundle.StartupBlockers) > 0 || len(bundle.RelatedIssues) > 0 {
+				t.Fatalf("denied event-derived evidence returned: %+v", bundle)
+			}
+			if !podAllowed && (bundle.Pods != 0 || len(bundle.PodNames) > 0 || len(bundle.Warnings) == 0) {
+				t.Fatalf("denied Pod membership not qualified: %+v", bundle)
+			}
+		})
 	}
 }

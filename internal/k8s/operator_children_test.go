@@ -62,3 +62,20 @@ func TestOperatorChildrenRefuseAReplacedRoot(t *testing.T) {
 		t.Fatalf("old incarnation got current children: %+v", got)
 	}
 }
+
+func TestOperatorNonControllerChildrenDoNotConsumeRuntimeSlots(t *testing.T) {
+	w, root := operatorChildrenWorld()
+	for i := range w.Objects {
+		if w.Objects[i].Ref.Group == "apps" && w.Objects[i].Ref.Name != "runtime-4" {
+			no := false
+			w.Objects[i].OwnerReferences[0].Controller = &no
+		}
+	}
+	got := operatorChildrenFromSource(ownershiptest.Scan(w), root, func(*ownership.Catalog) ownership.Access { return ownership.Unrestricted() })
+	if len(got.Workloads) != 1 || got.Workloads[0].Name != "runtime-4" {
+		t.Fatalf("co-owners consumed runtime slots: %+v", got.Workloads)
+	}
+	if len(got.Context.Items) != 25 {
+		t.Fatal("general direct-child preview lost co-owned resources")
+	}
+}

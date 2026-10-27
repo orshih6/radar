@@ -8,6 +8,7 @@ import (
 	"github.com/skyhook-io/radar/pkg/resourcecontext"
 	"github.com/skyhook-io/radar/pkg/resourceid"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // OperatorChildren separates a bounded general child preview from runtime
@@ -73,7 +74,14 @@ func operatorChildrenFromSource(source ownership.Source, fetched ownership.Obser
 	for _, child := range children {
 		r := child.Ref
 		ref := resourcecontext.ContextRef{Group: r.Group, Kind: r.Kind, Namespace: r.Namespace, Name: r.Name}
-		if runtimeWorkload(r.GroupKind()) && len(out.Workloads) < 4 {
+		controlled := false
+		for _, owner := range child.OwnerReferences {
+			if owner.Controller != nil && *owner.Controller && owner.UID == fetched.UID && owner.Name == fetched.Ref.Name && schema.FromAPIVersionAndKind(owner.APIVersion, owner.Kind).GroupKind() == fetched.Ref.GroupKind() {
+				controlled = true
+				break
+			}
+		}
+		if controlled && runtimeWorkload(r.GroupKind()) && len(out.Workloads) < 4 {
 			out.Workloads = append(out.Workloads, ref)
 		}
 		if len(out.Context.Items) < 25 {

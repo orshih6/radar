@@ -164,6 +164,8 @@ func grantDiagnoseDeploymentRead(t *testing.T, username string) {
 	t.Helper()
 	perms := getPermCache().Get(username, nil)
 	perms.SetCanI("get", "apps", "deployments", "alpha", true)
+	perms.SetCanI("list", "", "pods", "alpha", true)
+	perms.SetCanI("list", "", "events", "alpha", true)
 	perms.SetCanI("list", "apps", "deployments", "alpha", true)
 	perms.SetCanI("list", "", "configmaps", "alpha", true)
 }
@@ -401,19 +403,8 @@ func TestHandleDiagnoseMetricsOmittedWhenWorkloadReadDenied(t *testing.T) {
 	getPermCache().Get("scoped", nil).SetCanI("get", "apps", "deployments", "alpha", false)
 
 	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "alpha", "cart"))
-	if err != nil {
-		t.Fatalf("handleDiagnose: %v", err)
-	}
-	text := extractText(t, result)
-	var got map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(text), &got); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := got["metrics"]; ok {
-		t.Fatal("metrics present although the caller cannot get the Deployment")
-	}
-	if strings.Contains(strings.ToLower(text), "prometheus") {
-		t.Fatal("a denied read leaked Prometheus state into the response")
+	if err == nil || !strings.Contains(err.Error(), "forbidden") || result != nil {
+		t.Fatalf("denied workload read returned data: result=%v err=%v", result, err)
 	}
 	if f.probeCalls != 0 || len(f.rangeParams) != 0 {
 		t.Fatalf("Prometheus was contacted (%d probes, %d range queries) for a denied read", f.probeCalls, len(f.rangeParams))
@@ -567,9 +558,9 @@ func TestHandleDiagnoseMetricsGateFailsClosedWithoutDecision(t *testing.T) {
 	getPermCache().Get("undecided", nil).SetCanI("list", "", "configmaps", "alpha", true)
 	// No cached decision for get deployments: the gate must ask an apiserver
 	// the test does not have, so it denies, and Prometheus is never touched.
-	_, m := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
-	if m != nil {
-		t.Fatalf("metrics = %+v, want the field omitted when the gate cannot answer", m)
+	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "alpha", "cart"))
+	if err == nil || result != nil {
+		t.Fatalf("unanswered workload access returned data: result=%v err=%v", result, err)
 	}
 	if f.probeCalls != 0 || len(f.rangeParams) != 0 {
 		t.Fatalf("Prometheus was contacted (%d probes, %d range queries) before the gate answered", f.probeCalls, len(f.rangeParams))

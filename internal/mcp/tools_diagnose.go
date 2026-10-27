@@ -310,6 +310,9 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		return nil, fmt.Errorf("invalid group %q for %s: expected %q", input.Group, input.Kind, expectedGroup)
 	}
 	input.Group = expectedGroup
+	if !canReadInNamespace(ctx, input.Group, kindNorm, input.Namespace, "get") {
+		return nil, fmt.Errorf("forbidden: cannot get %s.%s in namespace %q", kindNorm, input.Group, input.Namespace)
+	}
 
 	if !checkNamespaceAccess(ctx, input.Namespace) {
 		return nil, fmt.Errorf("forbidden: no access to namespace %q", input.Namespace)
@@ -357,13 +360,27 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		return nil, fmt.Errorf("failed to minify: %w", err)
 	}
 
-	pods, podsErr := resolveDiagnosePods(cache, kindNorm, input.Namespace, input.Name, obj)
+	canReadPods := kindNorm == "pods" || canReadInNamespace(ctx, "", "pods", input.Namespace, "list")
+	canReadEvents := canReadInNamespace(ctx, "", "events", input.Namespace, "list")
+	var pods []*corev1.Pod
+	var podsErr error
+	if canReadPods {
+		pods, podsErr = resolveDiagnosePods(cache, kindNorm, input.Namespace, input.Name, obj)
+	} else {
+		podsErr = fmt.Errorf("%w: caller cannot list Pods in this namespace", errPodsNotListable)
+	}
 	podsNotListable := errors.Is(podsErr, errPodsNotListable)
 	podsCacheWarming := errors.Is(podsErr, errPodsCacheWarming)
 	if podsErr != nil && !podsNotListable && !podsCacheWarming {
 		return nil, podsErr
 	}
-	issueSummary, issueRows := computeMCPIssueContext(ctx, cache, canonicalGroup, canonicalKind, input.Namespace, input.Name, true)
+	// These detectors mix Pod and Event evidence. Withhold the projection
+	// when either input is denied instead of leaking it through derived prose.
+	var issueSummary *resourcecontext.IssueSummary
+	var issueRows []issues.Issue
+	if canReadPods && canReadEvents {
+		issueSummary, issueRows = computeMCPIssueContext(ctx, cache, canonicalGroup, canonicalKind, input.Namespace, input.Name, true)
+	}
 	resCtx := buildMCPResourceContextWithStaleChecks(
 		ctx,
 		obj,
@@ -466,14 +483,20 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		)
 	}
 
-	events, eventsTotalGroups, eventsExcluded, eventsErr := fetchEventsForResource(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, objectMeta.GetUID(), types.UID(objectMeta.GetAnnotations()[corev1.MirrorPodAnnotationKey]), pods, 10)
-	resp.Events = events
-	resp.EventsTotalGroups = eventsTotalGroups
-	if eventsErr != nil {
-		resp.EventsError = eventsErr.Error()
+	var eventsExcluded int
+	if canReadEvents {
+		events, total, excluded, eventErr := fetchEventsForResource(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, objectMeta.GetUID(), types.UID(objectMeta.GetAnnotations()[corev1.MirrorPodAnnotationKey]), pods, 10)
+		resp.Events, resp.EventsTotalGroups, eventsExcluded = events, total, excluded
+		if eventErr != nil {
+			resp.EventsError = eventErr.Error()
+		}
+	} else {
+		resp.EventsError = "forbidden: cannot list events in this namespace"
+	}
+	if canReadPods && canReadEvents {
+		resp.StartupBlockers = startupBlockersForWorkload(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, pods)
 	}
 
-	resp.StartupBlockers = startupBlockersForWorkload(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, pods)
 	if len(resp.RelatedIssues) > 0 || len(resp.StartupBlockers) > 0 {
 		if p := issues.NewCacheProvider(); p != nil {
 			resp.ChangeContext = p.ChangeContextForIssue(issues.Issue{
@@ -521,6 +544,9 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 	}
 	resp.DNSContext = dnsContextForDiagnose(ctx, cache, obj, pods, resp.LogsCurrent, resp.LogsPrevious, resp.Events)
 	resp.Warnings = objectWarnings(obj, resCtx)
+	if !canReadPods || !canReadEvents {
+		resp.Warnings = append(resp.Warnings, "Related Issues and startup blockers are omitted because the caller cannot read all of their Pod/Event evidence. Empty findings are not an all-clear.")
+	}
 	if podsNotListable {
 		// Say it plainly: everything pod-derived is empty because the pods
 		// could not be listed, not because the workload has none.
