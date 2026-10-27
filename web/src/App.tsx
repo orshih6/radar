@@ -57,6 +57,7 @@ import { UpdateNotification } from './components/ui/UpdateNotification'
 import { openWhatsNew, useWhatsNewStatus, WhatsNew } from './components/whats-new/WhatsNew'
 import { useUsageData, useUsageRecording } from './api/usage-data'
 import { UsageDataPrompt } from './components/usage-data/UsageDataPrompt'
+import { ProductHuntNotice } from './components/product-hunt/ProductHuntNotice'
 import { ShortcutHelpOverlay } from './components/ui/ShortcutHelpOverlay'
 import { DiagnosticsOverlay, type DiagnosticsFocus } from './components/ui/DiagnosticsOverlay'
 import { useEventSource } from './hooks/useEventSource'
@@ -2578,6 +2579,7 @@ function AppInner({ manageDocumentTitle = false, documentTitleSuffix, onClusterL
       {!navCustomization.embedded && <UpdateNotification />}
       {!navCustomization.embedded && <WhatsNew onNavigate={navigateToPath} usageData={usageData.data} />}
       {!navCustomization.embedded && <UsageDataPrompt status={usageData.data} />}
+      {!navCustomization.embedded && <ProductHuntNotice usageData={usageData.data} />}
 
       {/* Bottom Dock for Terminal/Logs */}
       <BottomDock viewNamespaces={namespaces} />
