@@ -8,8 +8,11 @@ import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 import { isPhaseDismissed, launchPhase, markPhaseDismissed, type LaunchPhase } from './launchWindow'
 
-export const LAUNCH_URL = 'https://www.producthunt.com/products/radar-7?launch=radar-101'
-const FEATURE_URL = 'https://radarhq.io/product/ai-investigations'
+// The same tag for every install: it says the click came from inside Radar,
+// nothing about who clicked.
+const UTM = 'utm_source=radar-oss&utm_medium=app&utm_campaign=ph-launch-2026-10'
+export const LAUNCH_URL = `https://www.producthunt.com/products/radar-7?launch=radar-101&${UTM}`
+const FEATURE_URL = `https://radarhq.io/product/ai-investigations?${UTM}`
 const SHOW_DELAY_MS = 10_000
 
 export function shouldShowLaunchNotice(opts: {
