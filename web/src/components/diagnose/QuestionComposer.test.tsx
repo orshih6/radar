@@ -3,15 +3,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { QuestionDraft } from "./DiagnoseContext";
 import { QuestionComposer } from "./QuestionComposer";
 
 const state = vi.hoisted(() => ({
   openInvestigation: vi.fn(),
-  questionDraft: null as null | {
-    seq: number;
-    text?: string;
-    pin?: { kind: string; group: string; namespace: string; name: string };
-  },
+  saveQuestionDraft: vi.fn(),
+  questionDraft: null as null | QuestionDraft,
   actives: ["shop"],
   issues: [] as unknown[],
   pinIssues: [] as unknown[],
@@ -22,6 +20,7 @@ vi.mock("./DiagnoseContext", () => ({
     openInvestigation: state.openInvestigation,
     agentLabel: "Claude Code",
     questionDraft: state.questionDraft,
+    saveQuestionDraft: state.saveQuestionDraft,
   }),
 }));
 vi.mock("../../api/client", () => ({
@@ -38,6 +37,7 @@ let root: Root;
 
 beforeEach(() => {
   state.openInvestigation.mockReset();
+  state.saveQuestionDraft.mockReset();
   state.questionDraft = null;
   state.issues = [];
   state.pinIssues = [];
@@ -201,5 +201,24 @@ describe("QuestionComposer", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("on NetworkPolicy shop/deny-all?");
     expect(text).not.toContain("other/x");
+  });
+
+  it("gives back unsent words when it unmounts", async () => {
+    await render();
+    await type("half a question");
+    await act(async () => root.render(<></>));
+    expect(state.saveQuestionDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: "half a question" }),
+    );
+  });
+
+  it("starts from a saved draft without treating it as a new hand-off", async () => {
+    state.questionDraft = { seq: 3, text: "where I left off", lookBack: "6h" };
+    await render();
+    expect(textarea().value).toBe("where I left off");
+    expect(
+      document.querySelector('[role="radio"][aria-checked="true"]')
+        ?.textContent,
+    ).toBe("6h");
   });
 });

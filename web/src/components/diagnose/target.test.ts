@@ -110,6 +110,7 @@ describe("rerunOpening", () => {
         question: "checkout is slow",
         namespaces: ["shop"],
         lookBack: "6h",
+        createdAt: "2026-10-27T09:00:00Z",
       }),
     ).toEqual({
       kind: "",
@@ -121,6 +122,25 @@ describe("rerunOpening", () => {
       question: "checkout is slow",
       namespaces: ["shop"],
       lookBack: "6h",
+      askedAt: "2026-10-27T09:00:00Z",
     });
+  });
+
+  it("keeps the first asking time through a chain of re-runs, and none without a question", () => {
+    const base = {
+      kind: "Deployment",
+      group: "apps",
+      namespace: "shop",
+      name: "api",
+      createdAt: "2026-10-28T09:00:00Z",
+    };
+    expect(
+      rerunOpening({
+        ...base,
+        question: "why?",
+        askedAt: "2026-10-27T09:00:00Z",
+      }).askedAt,
+    ).toBe("2026-10-27T09:00:00Z");
+    expect(rerunOpening(base).askedAt).toBeUndefined();
   });
 });

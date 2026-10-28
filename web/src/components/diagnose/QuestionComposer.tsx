@@ -33,17 +33,26 @@ export function QuestionComposer({
 }: {
   onBrowseIssues?: () => void;
 }) {
-  const { openInvestigation, agentLabel, questionDraft } = useDiagnose();
-  const [text, setText] = useState("");
-  const [pin, setPin] = useState<QuestionPin | null>(null);
-  const [lookBack, setLookBack] = useState<string>(DEFAULT_LOOK_BACK);
+  const { openInvestigation, agentLabel, questionDraft, saveQuestionDraft } =
+    useDiagnose();
+  // The draft outlives this component: it starts from it, and gives back
+  // whatever is unsent when it unmounts (opening a run, a resource).
+  const [text, setText] = useState(questionDraft?.text ?? "");
+  const [pin, setPin] = useState<QuestionPin | null>(
+    questionDraft?.pin ?? null,
+  );
+  const [lookBack, setLookBack] = useState<string>(
+    questionDraft?.lookBack ?? DEFAULT_LOOK_BACK,
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const pickerInputRef = useRef<HTMLInputElement>(null);
 
   // Where to start follows the namespace picker until the engineer edits it.
   const { data: scope } = useNamespaceScope();
-  const [namespaces, setNamespaces] = useState<string[] | null>(null);
+  const [namespaces, setNamespaces] = useState<string[] | null>(
+    questionDraft?.namespaces ?? null,
+  );
   const startIn = namespaces ?? scope?.actives ?? [];
 
   // Suggestions follow what the question is about: the pinned resource's
@@ -68,9 +77,27 @@ export function QuestionComposer({
     if (pickerOpen) pickerInputRef.current?.focus();
   }, [pickerOpen]);
 
-  // A hand-off (Ask about a resource, the Omnibar) replaces what is here.
+  const unsent = useRef({ text, pin, namespaces, lookBack });
+  unsent.current = { text, pin, namespaces, lookBack };
+  useEffect(
+    () => () => {
+      const draft = unsent.current;
+      saveQuestionDraft({
+        text: draft.text,
+        pin: draft.pin ?? undefined,
+        namespaces: draft.namespaces ?? undefined,
+        lookBack: draft.lookBack,
+      });
+    },
+    [saveQuestionDraft],
+  );
+
+  // A new hand-off (Ask about a resource, a start that never became a run)
+  // replaces what is here; the draft this composer started from does not.
+  const appliedSeq = useRef(questionDraft?.seq);
   useEffect(() => {
-    if (!questionDraft) return;
+    if (!questionDraft || questionDraft.seq === appliedSeq.current) return;
+    appliedSeq.current = questionDraft.seq;
     setText(questionDraft.text ?? "");
     setPin(questionDraft.pin ?? null);
     if (questionDraft.namespaces) setNamespaces(questionDraft.namespaces);
@@ -310,12 +337,15 @@ function ResourcePicker({
 }) {
   const [query, setQuery] = useState("");
   const listId = useId();
-  const { data, isFetching } = useSearch(query, {
+  const { data, isFetching, isPlaceholderData } = useSearch(query, {
     context: "none",
     limit: 8,
     globalNs: true,
   });
-  const hits = data?.hits ?? [];
+  // Results kept from the previous query while the next one loads must not
+  // be pinnable: Enter would pin what the engineer just typed away from.
+  const hits =
+    query.trim().length >= 2 && !isPlaceholderData ? (data?.hits ?? []) : [];
   return (
     <div className="border-t border-theme-border-subtle px-3 py-2">
       <input
@@ -372,11 +402,14 @@ function ResourcePicker({
             </button>
           </li>
         ))}
-        {query.trim().length > 0 && !isFetching && hits.length === 0 && (
-          <li className="px-2 py-1 text-xs text-theme-text-tertiary">
-            No matching resources.
-          </li>
-        )}
+        {query.trim().length >= 2 &&
+          !isFetching &&
+          !isPlaceholderData &&
+          hits.length === 0 && (
+            <li className="px-2 py-1 text-xs text-theme-text-tertiary">
+              No matching resources.
+            </li>
+          )}
       </ul>
       <p className="mt-1 flex items-center gap-1 text-[11px] text-theme-text-tertiary">
         <Plus className="h-3 w-3" />

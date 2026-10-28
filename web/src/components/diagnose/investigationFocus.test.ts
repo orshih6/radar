@@ -54,6 +54,52 @@ describe("focusFromCase", () => {
     ]);
   });
 
+  it("names the cited issue's subject, not the resource the read was about", () => {
+    const cause = item("cause", "diagnose", {
+      kind: "Deployment",
+      namespace: "gl-netpol",
+      name: "web",
+    });
+    cause.observation = {
+      data: {
+        type: "issue",
+        relevance: "producer-related",
+        issue: {
+          kind: "NetworkPolicy",
+          group: "networking.k8s.io",
+          namespace: "gl-netpol",
+          name: "deny-all-ingress",
+        },
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([cause]))).toEqual([
+      {
+        kind: "NetworkPolicy",
+        group: "networking.k8s.io",
+        namespace: "gl-netpol",
+        name: "deny-all-ingress",
+      },
+    ]);
+  });
+
+  it("names a bound resource by its apiVersion group", () => {
+    const cause = item("cause", "list_resources", { kind: "configmaps" });
+    cause.observation = {
+      data: {
+        type: "resource",
+        resource: {
+          apiVersion: "apps/v1",
+          kind: "Deployment",
+          metadata: { namespace: "shop", name: "api" },
+        },
+        warnings: [],
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([cause]))).toEqual([
+      { kind: "Deployment", group: "apps", namespace: "shop", name: "api" },
+    ]);
+  });
+
   it("spells an agent's lowercase kind the Kubernetes way", () => {
     expect(
       focusFromCase(

@@ -249,6 +249,9 @@ export interface RunSummary {
   namespaces?: string[];
   /** How far before the question the problem started: 15m, 1h, 6h or 24h. */
   lookBack?: string;
+  /** When the question was first asked, when that was before this run
+   *  started (a re-run or a narrowed run). */
+  askedAt?: string;
   status: "running" | "stopping" | "done" | "error" | "stopped" | "stale";
   sessionId?: string;
   preview?: string;
@@ -456,6 +459,7 @@ export async function createRun(
     question?: string;
     namespaces?: string[];
     lookBack?: string;
+    askedAt?: string;
   },
   opts?: {
     agent?: string;

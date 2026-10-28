@@ -48,6 +48,16 @@ export interface InvestigationOpening extends InvestigationTargetIdentity {
   question?: string;
   namespaces?: string[];
   lookBack?: string;
+  askedAt?: string;
+}
+
+// When a run's question was first asked: its own start, unless it re-ran or
+// narrowed an earlier question. A run built from it keeps that time, so its
+// look-back still covers the incident the engineer described.
+export function questionAskedAt(
+  run: InvestigationOpening & { createdAt: string },
+): string | undefined {
+  return run.question ? (run.askedAt ?? run.createdAt) : undefined;
 }
 
 // A run opened by a question alone has no resource: no Apply, no
@@ -79,7 +89,7 @@ export function formatQuestionScope(run: InvestigationOpening): string {
 // run found — being handed the previous answer is the one thing someone
 // clicking it doesn't want.
 export function rerunOpening(
-  run: InvestigationOpening & { issueId?: string },
+  run: InvestigationOpening & { issueId?: string; createdAt: string },
 ): InvestigationOpening & { issueId?: string; fresh: true } {
   return {
     kind: run.kind,
@@ -91,5 +101,6 @@ export function rerunOpening(
     question: run.question,
     namespaces: run.namespaces,
     lookBack: run.lookBack,
+    askedAt: questionAskedAt(run),
   };
 }

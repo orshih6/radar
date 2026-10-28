@@ -119,6 +119,7 @@ import {
   formatInvestigationTarget,
   formatInvestigationTitle,
   isQuestionOnly,
+  questionAskedAt,
   rerunOpening,
 } from "./target";
 import { parseContextName } from "../../utils/context-name";
@@ -2548,6 +2549,7 @@ export function InvestigationView({
                             ...resource,
                             question: run.question,
                             lookBack: run.lookBack,
+                            askedAt: questionAskedAt(run),
                           })
                         }
                       />

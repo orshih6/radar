@@ -60,6 +60,9 @@ export interface Target {
   question?: string;
   namespaces?: string[];
   lookBack?: string;
+  /** When the question was first asked, for a run that re-runs or narrows
+   *  an earlier one; absent means now. */
+  askedAt?: string;
 }
 export type DiagnoseView = "home" | "investigation";
 
@@ -139,6 +142,9 @@ interface DiagnoseCtx {
   openHome: () => void;
   // Opens Home's question composer with a resource pinned or words typed.
   openQuestion: (draft: Omit<QuestionDraft, "seq">) => void;
+  // Keeps the composer's unsent content when it unmounts, without handing it
+  // back to the composer as a new start.
+  saveQuestionDraft: (draft: Omit<QuestionDraft, "seq">) => void;
   questionDraft: QuestionDraft | null;
   openWorkspace: (runID?: string | null) => void;
   restoreWorkspace: () => void;
@@ -1029,6 +1035,11 @@ function RoutedDiagnoseProvider({
     },
     [openHome],
   );
+  const saveQuestionDraft = useCallback(
+    (draft: Omit<QuestionDraft, "seq">) =>
+      setQuestionDraft((previous) => ({ ...draft, seq: previous?.seq ?? 0 })),
+    [],
+  );
   const openWorkspace = useCallback(
     (preferredRunID?: string | null) => {
       setOpen(true);
@@ -1212,6 +1223,7 @@ function RoutedDiagnoseProvider({
     openRun,
     openHome,
     openQuestion,
+    saveQuestionDraft,
     questionDraft,
     openWorkspace,
     restoreWorkspace,
