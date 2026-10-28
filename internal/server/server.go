@@ -53,6 +53,7 @@ import (
 	"github.com/skyhook-io/radar/internal/images"
 	"github.com/skyhook-io/radar/internal/investigationrefs"
 	"github.com/skyhook-io/radar/internal/k8s"
+	"github.com/skyhook-io/radar/internal/launchday"
 	"github.com/skyhook-io/radar/internal/opencost"
 	prometheuspkg "github.com/skyhook-io/radar/internal/prometheus"
 	"github.com/skyhook-io/radar/internal/readscope"
@@ -1442,11 +1443,15 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
+	var info *version.UpdateInfo
 	if deploymentMode() == k8s.DeploymentModeCloud {
-		s.writeJSON(w, version.CheckForUpdateRelease(r.Context()))
-		return
+		info = version.CheckForUpdateRelease(r.Context())
+	} else {
+		info = version.CheckForUpdate(r.Context())
 	}
-	s.writeJSON(w, version.CheckForUpdate(r.Context()))
+	launch := launchday.Current()
+	info.ProductHuntLaunch = &launch
+	s.writeJSON(w, info)
 }
 
 func (s *Server) handleClusterInfo(w http.ResponseWriter, r *http.Request) {

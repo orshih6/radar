@@ -16,7 +16,7 @@ import { WithTooltip } from './Tooltip'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { IN_CLUSTER_UPGRADE_URL } from '../../utils/version'
-import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner, launchPhase } from '../product-hunt/launchWindow'
+import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner, launchPhase, resolveLaunch } from '../product-hunt/launchWindow'
 
 const DISMISSED_KEY = 'radar-update-dismissed'
 
@@ -45,7 +45,6 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
   const [dismissed, setDismissed] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
-  const [launchHoldsCorner, setLaunchHoldsCorner] = useState(() => launchNoticeHoldsCorner(Date.now()))
 
   // Desktop update state
   const [desktopUpdating, setDesktopUpdating] = useState(false)
@@ -98,13 +97,13 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
 
   // Runs until the launch window is over, so a notice already on screen when
   // the launch day starts steps aside too.
-  const [launchWindowOpen, setLaunchWindowOpen] = useState(() => launchPhase(Date.now()) !== null)
+  const launch = resolveLaunch(versionInfo?.productHuntLaunch)
+  const [launchNow, setLaunchNow] = useState(() => Date.now())
+  const launchWindowOpen = launchPhase(launch, launchNow) !== null
+  const launchHoldsCorner = launchNoticeHoldsCorner(launch, launchNow)
   useEffect(() => {
     if (inSettings || !launchWindowOpen) return
-    const recheck = () => {
-      setLaunchHoldsCorner(launchNoticeHoldsCorner(Date.now()))
-      setLaunchWindowOpen(launchPhase(Date.now()) !== null)
-    }
+    const recheck = () => setLaunchNow(Date.now())
     window.addEventListener(LAUNCH_NOTICE_DISMISSED_EVENT, recheck)
     const poll = window.setInterval(recheck, 60_000)
     return () => {

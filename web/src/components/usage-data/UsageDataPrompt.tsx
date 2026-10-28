@@ -4,7 +4,7 @@ import { BarChart3, X } from 'lucide-react'
 import { useMarkUsagePromptShown, useSetUsageData, type UsageDataStatus } from '../../api/usage-data'
 import { useVersionCheck } from '../../api/client'
 import { isUpdateDismissed } from '../ui/UpdateNotification'
-import { launchNoticeHoldsCorner } from '../product-hunt/launchWindow'
+import { launchNoticeHoldsCorner, resolveLaunch } from '../product-hunt/launchWindow'
 import { UsageDataAnswered, UsageDataBlurb } from './UsageDataAsk'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
@@ -73,7 +73,7 @@ export function UsageDataPrompt({ status }: { status: UsageDataStatus | undefine
   const eligible = shouldShowFirstRunPrompt({
     status,
     ready,
-    updateNoticeShowing: updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || launchNoticeHoldsCorner(Date.now()),
+    updateNoticeShowing: updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || launchNoticeHoldsCorner(resolveLaunch(versionInfo?.productHuntLaunch), Date.now()),
   })
   useEffect(() => {
     if (eligible && !recorded.current) {

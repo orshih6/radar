@@ -3,24 +3,51 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../api/client', () => ({ useCapabilities: () => ({ data: undefined }), useVersionCheck: () => ({ data: undefined }) }))
 vi.mock('../../api/usage-data', () => ({ useSetUsageData: () => ({ mutate: vi.fn(), isPending: false }), useMarkUsagePromptShown: () => vi.fn() }))
 
-import { shouldShowLaunchNotice } from './ProductHuntNotice'
-import { isPhaseDismissed, launchNoticeHoldsCorner, launchPhase } from './launchWindow'
+import { launchLink, shouldShowLaunchNotice } from './ProductHuntNotice'
+import { FALLBACK_LAUNCH, isPhaseDismissed, launchDayLabel, launchNoticeHoldsCorner, launchPhase, resolveLaunch } from './launchWindow'
+
+const launch = FALLBACK_LAUNCH
 
 describe('launchPhase', () => {
   it('is upcoming before Product Hunt day starts in Pacific time', () => {
-    expect(launchPhase(Date.parse('2026-10-28T12:00:00Z'))).toBe('upcoming')
-    expect(launchPhase(Date.parse('2026-10-28T23:59:59-07:00'))).toBe('upcoming')
+    expect(launchPhase(launch, Date.parse('2026-10-28T12:00:00Z'))).toBe('upcoming')
+    expect(launchPhase(launch, Date.parse('2026-10-28T23:59:59-07:00'))).toBe('upcoming')
   })
 
   it('is live for the whole Pacific day of Oct 29', () => {
-    expect(launchPhase(Date.parse('2026-10-29T00:00:00-07:00'))).toBe('live')
-    expect(launchPhase(Date.parse('2026-10-29T09:01:00+02:00'))).toBe('live')
-    expect(launchPhase(Date.parse('2026-10-29T23:59:59-07:00'))).toBe('live')
+    expect(launchPhase(launch, Date.parse('2026-10-29T00:00:00-07:00'))).toBe('live')
+    expect(launchPhase(launch, Date.parse('2026-10-29T09:01:00+02:00'))).toBe('live')
+    expect(launchPhase(launch, Date.parse('2026-10-29T23:59:59-07:00'))).toBe('live')
   })
 
   it('is over once the Pacific day ends', () => {
-    expect(launchPhase(Date.parse('2026-10-30T00:00:00-07:00'))).toBe(null)
-    expect(launchPhase(Date.parse('2026-11-15T00:00:00Z'))).toBe(null)
+    expect(launchPhase(launch, Date.parse('2026-10-30T00:00:00-07:00'))).toBe(null)
+    expect(launchPhase(launch, Date.parse('2026-11-15T00:00:00Z'))).toBe(null)
+  })
+})
+
+describe('resolveLaunch', () => {
+  it('uses the built-in launch only when the version check says nothing', () => {
+    expect(resolveLaunch(undefined)).toBe(FALLBACK_LAUNCH)
+  })
+
+  it('follows a moved or cancelled launch from the version check', () => {
+    const moved = resolveLaunch({ enabled: true, url: launch.url, start: '2026-11-05T08:00:00Z', end: '2026-11-06T08:00:00Z' })
+    expect(launchPhase(moved, Date.parse('2026-10-29T12:00:00Z'))).toBe('upcoming')
+    expect(launchPhase(moved, Date.parse('2026-11-05T12:00:00Z'))).toBe('live')
+    expect(launchDayLabel(moved)).toBe('Nov 5')
+
+    const cancelled = resolveLaunch({ enabled: false, url: '', start: '0001-01-01T00:00:00Z', end: '0001-01-01T00:00:00Z' })
+    expect(launchPhase(cancelled, Date.parse('2026-10-28T12:00:00Z'))).toBe(null)
+    expect(launchPhase(cancelled, Date.parse('2026-10-29T12:00:00Z'))).toBe(null)
+  })
+
+  it('labels the day on Product Hunt time and tags the link', () => {
+    expect(launchDayLabel(launch)).toBe('Oct 29')
+    const link = new URL(launchLink(launch))
+    expect(link.searchParams.get('launch')).toBe('radar-101')
+    expect(link.searchParams.get('utm_source')).toBe('radar-oss')
+    expect(link.searchParams.get('utm_campaign')).toBe('ph-launch-2026-10')
   })
 })
 
@@ -32,8 +59,9 @@ describe('shouldShowLaunchNotice', () => {
     expect(shouldShowLaunchNotice({ ...base, phase: 'upcoming' })).toBe(true)
   })
 
-  it('never shows in-cluster, in Cloud, or before capabilities load', () => {
-    expect(shouldShowLaunchNotice({ ...base, deploymentMode: 'in-cluster' })).toBe(false)
+  it('shows in-cluster on launch day only, and never in Cloud or before capabilities load', () => {
+    expect(shouldShowLaunchNotice({ ...base, deploymentMode: 'in-cluster' })).toBe(true)
+    expect(shouldShowLaunchNotice({ ...base, deploymentMode: 'in-cluster', phase: 'upcoming' })).toBe(false)
     expect(shouldShowLaunchNotice({ ...base, deploymentMode: 'cloud' })).toBe(false)
     expect(shouldShowLaunchNotice({ ...base, deploymentMode: undefined })).toBe(false)
   })
@@ -55,19 +83,25 @@ describe('isPhaseDismissed', () => {
   afterEach(() => store.clear())
 
   it('keeps the launch-day card for someone who closed the one before it', () => {
-    store.set('radar-product-hunt-2026-10-dismissed-upcoming', '1')
-    expect(isPhaseDismissed('upcoming')).toBe(true)
-    expect(isPhaseDismissed('live')).toBe(false)
+    store.set('radar-product-hunt-dismissed-2026-10-29-upcoming', '1')
+    expect(isPhaseDismissed(launch, 'upcoming')).toBe(true)
+    expect(isPhaseDismissed(launch, 'live')).toBe(false)
+  })
+
+  it('announces a moved launch again', () => {
+    store.set('radar-product-hunt-dismissed-2026-10-29-upcoming', '1')
+    const moved = resolveLaunch({ enabled: true, url: launch.url, start: '2026-11-05T08:00:00Z', end: '2026-11-06T08:00:00Z' })
+    expect(isPhaseDismissed(moved, 'upcoming')).toBe(false)
   })
 
   it('holds the corner on launch day until the launch-day card is dismissed', () => {
     const before = Date.parse('2026-10-28T12:00:00Z')
     const during = Date.parse('2026-10-29T10:00:00-07:00')
     const after = Date.parse('2026-10-30T01:00:00-07:00')
-    expect(launchNoticeHoldsCorner(before)).toBe(false)
-    expect(launchNoticeHoldsCorner(during)).toBe(true)
-    expect(launchNoticeHoldsCorner(after)).toBe(false)
-    store.set('radar-product-hunt-2026-10-dismissed-live', '1')
-    expect(launchNoticeHoldsCorner(during)).toBe(false)
+    expect(launchNoticeHoldsCorner(launch, before)).toBe(false)
+    expect(launchNoticeHoldsCorner(launch, during)).toBe(true)
+    expect(launchNoticeHoldsCorner(launch, after)).toBe(false)
+    store.set('radar-product-hunt-dismissed-2026-10-29-live', '1')
+    expect(launchNoticeHoldsCorner(launch, during)).toBe(false)
   })
 })

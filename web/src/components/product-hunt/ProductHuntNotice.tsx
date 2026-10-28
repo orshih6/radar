@@ -6,13 +6,12 @@ import type { UsageDataStatus } from '../../api/usage-data'
 import { USAGE_PROMPT_VISIBILITY_EVENT, updateNoticeVisible, usagePromptOnScreen } from '../usage-data/UsageDataPrompt'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
-import { isPhaseDismissed, launchPhase, markPhaseDismissed, type LaunchPhase } from './launchWindow'
+import { isPhaseDismissed, launchDayLabel, launchPhase, markPhaseDismissed, resolveLaunch, type LaunchPhase, type ProductHuntLaunch } from './launchWindow'
 
 // The same tag for every install: it says the click came from inside Radar,
 // nothing about who clicked.
-const UTM = 'utm_source=radar-oss&utm_medium=app&utm_campaign=ph-launch-2026-10'
-export const LAUNCH_URL = `https://www.producthunt.com/products/radar-7?launch=radar-101&${UTM}`
-const FEATURE_URL = `https://radarhq.io/product/ai-investigations?${UTM}`
+const UTM = { utm_source: 'radar-oss', utm_medium: 'app', utm_campaign: 'ph-launch-2026-10' }
+const FEATURE_URL = `https://radarhq.io/product/ai-investigations?${new URLSearchParams(UTM)}`
 const SHOW_DELAY_MS = 10_000
 
 export function shouldShowLaunchNotice(opts: {
@@ -22,23 +21,34 @@ export function shouldShowLaunchNotice(opts: {
   ready: boolean
   cornerBusy: boolean
 }): boolean {
-  return opts.phase !== null && opts.deploymentMode === 'local' && !opts.dismissed && opts.ready && !opts.cornerBusy
+  // In-cluster Radar is often shared by people who didn't install it, so they
+  // get only the launch-day card.
+  const mode = opts.deploymentMode === 'local' || (opts.deploymentMode === 'in-cluster' && opts.phase === 'live')
+  return opts.phase !== null && mode && !opts.dismissed && opts.ready && !opts.cornerBusy
 }
 
-// A one-off, local-only notice for the October 2026 Product Hunt launch.
-// Before the day it waits its turn behind the update notice and the first-run
-// usage prompt; on the day they wait for it. Each phase is dismissed on its
-// own, so the launch-day card still shows to someone who closed the one before.
+export function launchLink(launch: ProductHuntLaunch): string {
+  const url = new URL(launch.url)
+  for (const [key, value] of Object.entries(UTM)) url.searchParams.set(key, value)
+  return url.toString()
+}
+
+// A one-off notice for the October 2026 Product Hunt launch, whose date and
+// link come from the update check. Before the day it waits its turn behind the
+// update notice and the first-run usage prompt; on the day they wait for it.
+// Each phase is dismissed on its own, so the launch-day card still shows to
+// someone who closed the one before.
 export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: UsageDataStatus | undefined; usageDataPending: boolean }) {
   const { data: capabilities } = useCapabilities()
-  const { data: versionInfo } = useVersionCheck()
+  const { data: versionInfo, isPending: versionPending } = useVersionCheck()
   const [now, setNow] = useState(() => Date.now())
   const [ready, setReady] = useState(false)
   // Covers a dismissal when localStorage is unavailable.
   const [dismissedHere, setDismissedHere] = useState<LaunchPhase[]>([])
 
   const [usagePromptShowing, setUsagePromptShowing] = useState(usagePromptOnScreen)
-  const phase = launchPhase(now)
+  const launch = resolveLaunch(versionInfo?.productHuntLaunch)
+  const phase = launchPhase(launch, now)
   const ended = phase === null
 
   useEffect(() => {
@@ -59,8 +69,9 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
   const show = shouldShowLaunchNotice({
     phase,
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
-    dismissed: phase !== null && (dismissedHere.includes(phase) || isPhaseDismissed(phase)),
-    ready,
+    dismissed: phase !== null && (dismissedHere.includes(phase) || isPhaseDismissed(launch, phase)),
+    // Waits for the version check, which says whether the launch is still on.
+    ready: ready && !versionPending,
     // A card already on screen keeps the corner, whatever the day.
     cornerBusy: usagePromptShowing || (phase === 'upcoming' && (
       updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || usageDataPending || !!usageData?.firstRunPrompt
@@ -71,7 +82,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
 
   const dismiss = () => {
     if (phase === null) return
-    markPhaseDismissed(phase)
+    markPhaseDismissed(launch, phase)
     setDismissedHere((d) => [...d, phase])
   }
 
@@ -105,29 +116,28 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
             Radar <Heart className="w-3.5 h-3.5 fill-current text-red-500 dark:text-red-400" aria-label="loves" /> Agents
           </p>
           <p className="text-xs font-medium text-accent-text mt-0.5">
-            {phase === 'live' ? 'Live on Product Hunt today' : 'Launching on Product Hunt Oct 29'}
+            {phase === 'live' ? 'Live on Product Hunt today' : `Launching on Product Hunt ${launchDayLabel(launch)}`}
           </p>
           <p className="text-xs text-theme-text-secondary mt-1.5">
             {phase === 'live'
-              ? "We're on Product Hunt today to showcase Radar's MCP server and AI investigations. Built with this community's feedback, so it's yours too: come say hi."
-              : "We're launching on Product Hunt to showcase Radar's MCP server and AI investigations. Built with this community's feedback, so it's yours too."}
-            {' '}Haven't tried them yet? We put a ton of work into making your agents feel as at home in Radar as you do.
+              ? "We're on Product Hunt today with Radar's newly upgraded MCP server and AI investigations. If Radar has made Kubernetes a little easier for you, a comment on the launch would mean a lot. It helps other engineers find Radar."
+              : "We're launching Radar's newly upgraded MCP server and AI investigations on Product Hunt. We'd love to see you there."}
           </p>
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
             <a
-              href={LAUNCH_URL}
+              href={launchLink(launch)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={dismiss}
-              className="text-xs font-semibold text-accent-text hover:underline"
+              className="text-xs font-semibold text-accent-text hover:underline whitespace-nowrap"
             >
-              {phase === 'live' ? 'See the launch →' : 'Follow on Product Hunt →'}
+              {phase === 'live' ? 'Comment on Product Hunt →' : 'Follow on Product Hunt →'}
             </a>
             <a
               href={FEATURE_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-theme-text-tertiary hover:text-theme-text-secondary hover:underline"
+              className="text-xs text-theme-text-tertiary hover:text-theme-text-secondary hover:underline whitespace-nowrap"
             >
               How it works
             </a>
