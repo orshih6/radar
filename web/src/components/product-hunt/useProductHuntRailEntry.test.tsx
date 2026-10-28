@@ -3,10 +3,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ mode: 'local' }))
+const state = vi.hoisted(() => ({ mode: 'local', pending: false }))
 vi.mock('../../api/client', () => ({
   useCapabilities: () => ({ data: { deployment: { mode: state.mode } } }),
-  useVersionCheck: () => ({ data: undefined }),
+  useVersionCheck: () => ({ data: undefined, isPending: state.pending }),
 }))
 
 import { useProductHuntRailEntry } from './useProductHuntRailEntry'
@@ -31,6 +31,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-29T17:00:00Z'))
   localStorage.clear()
   state.mode = 'local'
+  state.pending = false
   seen.mockClear()
 })
 
@@ -58,6 +59,12 @@ describe('useProductHuntRailEntry', () => {
 
     state.mode = 'local'
     vi.setSystemTime(new Date('2026-10-30T17:00:00Z'))
+    mount()
+    expect(entry()).toBeUndefined()
+  })
+
+  it('waits for the version check, which may have moved or cancelled the launch', () => {
+    state.pending = true
     mount()
     expect(entry()).toBeUndefined()
   })

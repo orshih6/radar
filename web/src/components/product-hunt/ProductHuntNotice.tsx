@@ -89,7 +89,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
     dismissed: phase !== null && isPhaseDismissed(launch, phase) && !reopened,
     // Waits for the version check, which says whether the launch is still on.
-    ready: reopened || (ready && !versionPending),
+    ready: (reopened || ready) && !versionPending,
     // A card already on screen keeps the corner, whatever the day.
     cornerBusy: !reopened && (usagePromptShowing || (phase === 'upcoming' && (
       updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || usageDataPending || !!usageData?.firstRunPrompt
