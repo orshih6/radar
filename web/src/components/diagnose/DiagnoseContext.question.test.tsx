@@ -44,6 +44,12 @@ vi.mock("../../api/diagnose", async (importOriginal) => ({
   recordConsent: api.recordConsent,
 }));
 
+const cluster = vi.hoisted(() => ({ name: "cluster-a" }));
+vi.mock("../../api/client", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useContexts: () => ({ data: [{ name: cluster.name, isCurrent: true }] }),
+}));
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root;
 let diagnose: ReturnType<typeof useDiagnose>;
@@ -76,6 +82,7 @@ beforeEach(async () => {
   api.recordConsent.mockReset();
   api.consented = {};
   api.runs = [];
+  cluster.name = "cluster-a";
   localStorage.clear();
   const element = document.createElement("div");
   document.body.appendChild(element);
@@ -172,5 +179,39 @@ describe("starting from a question", () => {
     await act(async () => diagnose.refreshRuns());
     await flush();
     expect(layout.runningRunIds.get(key)).toBe("plain");
+  });
+
+  it("drops a start waiting on consent when the cluster changes", async () => {
+    let recorded!: () => void;
+    api.recordConsent.mockReturnValue(
+      new Promise<void>((resolve) => (recorded = resolve)),
+    );
+    await act(async () =>
+      diagnose.openInvestigation({
+        ...question,
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+      }),
+    );
+    expect(diagnose.needsConsent).toBe(true);
+    await act(async () => diagnose.approveConsent());
+    cluster.name = "cluster-b";
+    await act(async () =>
+      root.render(
+        <DiagnoseProvider browserURLState={false}>
+          <Probe />
+        </DiagnoseProvider>,
+      ),
+    );
+    await act(async () => recorded());
+    await flush();
+    expect(diagnose.needsConsent).toBe(false);
+    expect(api.createRun).not.toHaveBeenCalled();
+    expect(diagnose.questionDraft).toMatchObject({
+      text: "checkout returns 502s",
+      context: "cluster-a",
+    });
   });
 });

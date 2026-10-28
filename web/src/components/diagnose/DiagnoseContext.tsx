@@ -32,6 +32,7 @@ import {
   investigationCapacity,
 } from "../../api/diagnose";
 import { getApiBase } from "../../api/config";
+import { useContexts } from "../../api/client";
 import {
   type InvestigationRefusal,
   type RunSummary,
@@ -66,6 +67,8 @@ export interface Target {
   /** Started from the question composer, which hands its draft over to the
    *  start: a start that never becomes a run gives the question back. */
   fromComposer?: boolean;
+  /** The cluster the start was made in; set when it is opened. */
+  context?: string;
 }
 export type DiagnoseView = "home" | "investigation";
 
@@ -541,6 +544,13 @@ function RoutedDiagnoseProvider({
     null,
   );
   const consentApprovalRef = useRef(0);
+  // The cluster in use now. A start waiting on consent names things in the
+  // cluster it was made in; if the cluster changes first, it is dropped
+  // rather than run against same-named things in the new one.
+  const { data: contexts } = useContexts();
+  const currentContext = contexts?.find((context) => context.isCurrent)?.name;
+  const currentContextRef = useRef(currentContext);
+  currentContextRef.current = currentContext;
   // A question that never became a run goes back to the composer, unless the
   // engineer has written something else there since.
   const giveQuestionBack = useCallback((t: Target) => {
@@ -564,6 +574,7 @@ function RoutedDiagnoseProvider({
             namespaces: t.namespaces,
             lookBack: t.lookBack,
             askedAt: t.askedAt,
+            context: t.context,
             restore: true,
           },
     );
@@ -906,7 +917,11 @@ function RoutedDiagnoseProvider({
   };
 
   const openInvestigation = useCallback(
-    (t: Target) => {
+    (opened: Target) => {
+      const t = {
+        ...opened,
+        context: opened.context ?? currentContextRef.current,
+      };
       setStartFailure(null);
       setConsentError(null);
       setOpen(true);
@@ -1229,6 +1244,19 @@ function RoutedDiagnoseProvider({
     if (!activeRunIdRef.current) setView("home");
   }, [pendingTarget, giveQuestionBack]);
   const dismissError = useCallback(() => setStartFailure(null), []);
+  useEffect(() => {
+    if (
+      pendingTarget?.context &&
+      currentContext &&
+      pendingTarget.context !== currentContext
+    ) {
+      consentApprovalRef.current++;
+      giveQuestionBack(pendingTarget);
+      setPendingTarget(null);
+      setConsentError(null);
+      if (!activeRunIdRef.current) setView("home");
+    }
+  }, [currentContext, pendingTarget, giveQuestionBack]);
 
   // Reserve a right gutter on the CONTENT area (not the navbar/rail — those stay
   // global and static) so docked content reflows beside the panel. Wide viewports
