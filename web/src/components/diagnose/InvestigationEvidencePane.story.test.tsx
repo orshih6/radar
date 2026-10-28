@@ -770,14 +770,19 @@ describe("story card defaults", () => {
           onViewActivity={() => {}}
         />,
       );
-    expect(render("Memory climbs.\n\n[[radar:evidence=0]]")).toContain(
-      "data-story-metrics",
-    );
-    // A compact marker or a context role drops the agent's note, not the chart.
+    // The symptom's chart is drawn at full height.
+    const symptom = render("Memory climbs.\n\n[[radar:evidence=0]]");
+    expect(symptom).toContain("data-story-metrics");
+    expect(symptom).not.toContain("height:140px");
+    // A compact marker or a context role drops the agent's note, not the
+    // chart; the role only draws it short.
     const context = [{ ...evidence[0], role: "context" as const }];
-    expect(
-      render("Memory climbs.\n\n[[radar:evidence=0|compact]]", context),
-    ).toContain("data-story-metrics");
+    const contextHtml = render(
+      "Memory climbs.\n\n[[radar:evidence=0|compact]]",
+      context,
+    );
+    expect(contextHtml).toContain("data-story-metrics");
+    expect(contextHtml).toContain("height:140px");
     // The collapsed preview bounds its height and leaves the chart out.
     expect(
       render("Memory climbs.\n\n[[radar:evidence=0]]\n\nMore after the fold."),

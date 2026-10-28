@@ -32,14 +32,25 @@ describe("storyExcerpt", () => {
 
   it("shows a placed chart whatever its role or compact marker, but not in the collapsed preview", () => {
     const metrics = observation({ type: "metrics", origin: "query" } as never);
-    expect(storyExcerpt(metrics, [], { compact: false })).toEqual({
-      kind: "chart",
-    });
-    expect(storyExcerpt(metrics, [], { compact: true })).toEqual({
-      kind: "chart",
-    });
     expect(
-      storyExcerpt(metrics, [], { compact: true, preview: true }),
+      storyExcerpt(metrics, [{ role: "context" }], { compact: false }),
+    ).toEqual({ kind: "chart", size: "short" });
+    expect(
+      storyExcerpt(metrics, [{ role: "rules_out" }], { compact: true }),
+    ).toEqual({ kind: "chart", size: "short" });
+    expect(
+      storyExcerpt(metrics, [{ role: "symptom" }], { compact: true }),
+    ).toEqual({ kind: "chart", size: "full" });
+    expect(
+      storyExcerpt(metrics, [{ role: "context" }, { role: "cause" }], {
+        compact: false,
+      }),
+    ).toEqual({ kind: "chart", size: "full" });
+    expect(
+      storyExcerpt(metrics, [{ role: "cause" }], {
+        compact: true,
+        preview: true,
+      }),
     ).toBeUndefined();
   });
 
