@@ -79,3 +79,21 @@ func TestLookBackLabel(t *testing.T) {
 		}
 	}
 }
+
+// A re-asked question opens later than it was asked; its change window
+// still has to cover the incident the engineer described.
+func TestQuestionTaskPromptWidensTheChangeWindowForALaterRun(t *testing.T) {
+	q := Question{Text: "checkout 502s", LookBack: "1h", AskedAt: askedAt, OpensAt: askedAt.Add(5 * time.Hour)}
+	if p := QuestionTaskPrompt(q, Options{}); !strings.Contains(p, "`get_changes` (since=6h)") {
+		t.Fatalf("window must reach back to the incident:\n%s", p)
+	}
+	q.OpensAt = askedAt.Add(3 * 24 * time.Hour)
+	if p := QuestionTaskPrompt(q, Options{}); !strings.Contains(p, "(since=4d)") {
+		t.Fatalf("a days-old question needs a days-long window:\n%s", p)
+	}
+	q.OpensAt = time.Time{}
+	q.LookBack = "15m"
+	if p := QuestionTaskPrompt(q, Options{}); !strings.Contains(p, "(since=15m)") {
+		t.Fatalf("a fresh question keeps its look-back:\n%s", p)
+	}
+}

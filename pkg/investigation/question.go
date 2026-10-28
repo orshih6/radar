@@ -27,6 +27,10 @@ type Question struct {
 	// LookBack is one of LookBacks, relative to AskedAt.
 	LookBack string
 	AskedAt  time.Time
+	// OpensAt is when this run opens; zero means AskedAt. A run that re-asks
+	// an earlier question opens later, and its change window has to reach
+	// back to the incident the engineer described, not just the look-back.
+	OpensAt time.Time
 }
 
 // QuestionSystemPrompt frames a run opened by the engineer's question. It
@@ -84,10 +88,27 @@ func questionOpening(q Question) string {
 }
 
 func changesWindow(q Question) string {
-	if q.LookBack == "" {
+	lookBack, err := time.ParseDuration(q.LookBack)
+	if q.LookBack == "" || err != nil {
 		return ""
 	}
-	return " (since=" + q.LookBack + ")"
+	if !q.AskedAt.IsZero() && q.OpensAt.After(q.AskedAt) {
+		lookBack += q.OpensAt.Sub(q.AskedAt)
+	}
+	return " (since=" + sinceDuration(lookBack) + ")"
+}
+
+// sinceDuration spells d the way get_changes reads it, rounded up so the
+// window never starts after the incident did: 15m, 7h, 3d.
+func sinceDuration(d time.Duration) string {
+	switch {
+	case d < time.Hour && d%time.Minute == 0:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	case d <= 48*time.Hour:
+		return strconv.Itoa(int((d+time.Hour-1)/time.Hour)) + "h"
+	default:
+		return strconv.Itoa(int((d+24*time.Hour-1)/(24*time.Hour))) + "d"
+	}
 }
 
 func whereToStart(q Question) string {

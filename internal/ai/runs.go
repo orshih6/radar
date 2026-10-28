@@ -738,7 +738,7 @@ func (m *RunManager) executeTurns(r *Run, turn runTurn) {
 			Agent:       r.Agent, Profile: r.Profile, Model: r.Model, Effort: r.Effort,
 			Health: r.Health, WorkDir: r.WorkDir,
 			Opening: investigation.Question{
-				Text: r.Question, Namespaces: r.Namespaces, LookBack: r.LookBack, AskedAt: r.askedAt(),
+				Text: r.Question, Namespaces: r.Namespaces, LookBack: r.LookBack, AskedAt: r.askedAt(), OpensAt: nowUTC(),
 			},
 			Metrics: m.metricsForTurn(turn),
 		}, func(ev StreamEvent) {
