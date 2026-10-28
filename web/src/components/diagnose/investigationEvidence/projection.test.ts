@@ -2389,13 +2389,15 @@ describe("honest zero and partial-result states", () => {
     });
     expect(result.limitations).toEqual(
       expect.arrayContaining([
+        // The graph was never built, so these are unknowns, not caps on a
+        // graph that is shown.
         expect.objectContaining({
           source: "Topology coverage",
-          kind: "truncated",
+          kind: "unknown",
         }),
         expect.objectContaining({
           source: "Topology scale",
-          kind: "truncated",
+          kind: "unknown",
           message: expect.stringContaining("namespace-scoped topology search"),
         }),
       ]),
