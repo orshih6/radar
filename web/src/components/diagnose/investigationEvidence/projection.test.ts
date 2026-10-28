@@ -1857,7 +1857,8 @@ describe("strict evidence adapters", () => {
       ),
     ]);
     expect(result.groups).toHaveLength(0);
-    expect(result.limitations[0]).toMatchObject({ kind: "truncated" });
+    expect(result.limitations[0]).toMatchObject({ kind: "unknown" });
+    expect(result.limitations[0].presentation).toBeUndefined();
     expect(result.limitations[0].source).toBe("Issue scan");
     expect(result.limitations[0].message).toContain(
       "Only part of this investigation result was saved",

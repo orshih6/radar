@@ -105,6 +105,8 @@ export interface EvidenceCoverageGroup {
   limitations: InvestigationEvidenceLimitation[];
   hasError: boolean;
   historyOnly: boolean;
+  /** Every entry is a sampling cap or a history bound: routine, not an open question. */
+  routineOnly: boolean;
 }
 
 /** A sampling cap or a history bound: bookkeeping for the record, not an open question. */
@@ -130,7 +132,7 @@ export function assessmentLimitLines(
   const routine: string[] = [];
   for (const group of groupEvidenceCoverage(limitations)) {
     const line = `${group.label}: ${group.summary}`;
-    if (group.limitations.every(routineLimitation)) routine.push(line);
+    if (group.routineOnly) routine.push(line);
     else open.push(line);
   }
   return { open, routine };
@@ -183,6 +185,7 @@ export function groupEvidenceCoverage(
         limitations: entries,
         hasError: errors.length > 0,
         historyOnly,
+        routineOnly: ordinaryLimits,
       };
     })
     .sort(
