@@ -2856,6 +2856,8 @@ describe("cited broader cards and coverage rows", () => {
       />,
     );
     expect(stoppedMarkup).not.toContain("not shown");
+    expect(stoppedMarkup).toContain("Evidence collected");
+    expect(stoppedMarkup).not.toContain("about this resource");
     expect(stoppedMarkup).not.toContain("No relevant evidence");
 
     const resolution = resolveInvestigationRootCauseEvidence(

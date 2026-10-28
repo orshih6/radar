@@ -553,7 +553,13 @@ export function InvestigationEvidencePane({
 
       <CollapsedEvidenceCollection
         id="investigation-workload-evidence"
-        title="More evidence about this resource"
+        title={
+          withoutTarget || showUncited
+            ? partition.main.length > 0
+              ? "More evidence collected"
+              : "Evidence collected"
+            : "More evidence about this resource"
+        }
         description=""
         groups={partition.workload}
         totalCount={partition.workload.length + partition.earlier.length}
