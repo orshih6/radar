@@ -105,14 +105,14 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       aria-label="Radar on Product Hunt"
       inert={!show || undefined}
       className={clsx(
-        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-theme-border bg-theme-surface shadow-theme-lg overflow-hidden origin-bottom-right',
+        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/50 dark:border-emerald-400/40 bg-theme-surface shadow-[0_8px_32px_-8px_rgba(16,185,129,0.45)] overflow-hidden origin-bottom-right',
         TRANSITION_MENU,
         isOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.97]',
         !show && 'pointer-events-none',
       )}
       style={overlayTransitionStyle(isOpen, 'menu')}
     >
-      <div className="relative flex gap-3 p-4 pr-10">
+      <div className="relative flex gap-3 p-4 pr-10 bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
         <button
           type="button"
           onClick={dismiss}
@@ -121,14 +121,14 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
         >
           <X className="w-3.5 h-3.5" />
         </button>
-        <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-accent-muted text-accent">
+        <span className="flex items-center justify-center w-9 h-9 shrink-0 rounded-lg bg-emerald-500 text-white shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)]">
           <Rocket className="w-4 h-4" aria-hidden />
         </span>
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-sm font-medium text-theme-text-primary">
             Radar <Heart className="w-3.5 h-3.5 fill-current text-red-500 dark:text-red-400" aria-label="loves" /> Agents
           </p>
-          <p className="text-xs font-medium text-accent-text mt-0.5">
+          <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 mt-0.5">
             {shown.phase === 'live' ? 'Live on Product Hunt today' : `Launching on Product Hunt ${launchDayLabel(shown.launch)}`}
           </p>
           <p className="text-xs text-theme-text-secondary mt-1.5">
@@ -136,13 +136,13 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
               ? "We're on Product Hunt today with Radar's newly upgraded MCP server and AI investigations. If Radar has made Kubernetes a little easier for you, a comment on the launch would mean a lot. It helps other engineers find Radar."
               : "We're launching Radar's newly upgraded MCP server and AI investigations on Product Hunt. We'd love to see you there."}
           </p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
             <a
               href={launchLink(shown.launch)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={dismiss}
-              className="text-xs font-semibold text-accent-text hover:underline whitespace-nowrap"
+              className="inline-flex items-center rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-white dark:text-emerald-950 whitespace-nowrap transition-colors"
             >
               {shown.phase === 'live' ? 'Comment on Product Hunt →' : 'Follow on Product Hunt →'}
             </a>
