@@ -60,7 +60,10 @@ export const RadarOmnibar = forwardRef<OmnibarHandle, RadarOmnibarProps>(functio
   // the composer opens with them so where and since when stay visible.
   const diagnose = useDiagnose()
   const onInvestigateQuery = diagnose.available && diagnose.questions
-    ? (text: string) => diagnose.openQuestion({ text })
+    ? // The omnibar seeds its ns: pills from the namespace picker, so no pill
+      // means the engineer cleared the scope: start across the cluster.
+      ({ text, namespaces }: { text: string; namespaces: string[] }) =>
+        diagnose.openQuestion({ text, namespaces })
     : undefined
   const { onNavigateKind } = callbacks
   const note = searchCoverageNote(searchData?.coverage, {

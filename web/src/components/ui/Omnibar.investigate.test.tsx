@@ -26,7 +26,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function render(onInvestigateQuery: ((text: string) => void) | undefined, hits: SearchHit[] = []) {
+function render(onInvestigateQuery: ((query: { text: string; namespaces: string[] }) => void) | undefined, hits: SearchHit[] = []) {
   act(() => {
     root.render(<Omnibar onOpenResource={vi.fn()} commandItems={[]} searchData={{ hits }} onInvestigateQuery={onInvestigateQuery} />)
   })
@@ -53,7 +53,7 @@ describe('Omnibar investigate row', () => {
     const row = investigateButton()
     expect(row?.textContent).toContain('Investigate “checkout returns 502s”')
     act(() => { row!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
-    expect(onInvestigate).toHaveBeenCalledWith('checkout returns 502s')
+    expect(onInvestigate).toHaveBeenCalledWith({ text: 'checkout returns 502s', namespaces: [] })
   })
 
   it('comes after a resource match', () => {
@@ -68,5 +68,15 @@ describe('Omnibar investigate row', () => {
     render(undefined)
     typeQuery('checkout returns 502s')
     expect(investigateButton()).toBeUndefined()
+  })
+
+  it('carries ns: modifiers as where to start', () => {
+    const onInvestigate = vi.fn()
+    act(() => {
+      root.render(<Omnibar onOpenResource={vi.fn()} commandItems={[]} searchData={{ hits: [] }} seedNamespaces={['payments']} onInvestigateQuery={onInvestigate} />)
+    })
+    typeQuery('slow checkout')
+    act(() => { investigateButton()!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    expect(onInvestigate).toHaveBeenCalledWith({ text: 'slow checkout', namespaces: ['payments'] })
   })
 })

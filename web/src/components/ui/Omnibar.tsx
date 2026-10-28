@@ -137,9 +137,10 @@ export interface OmnibarProps {
    *  search surface. Omit to keep the omnibar a pure launcher. */
   onViewAllResults?: (query: string) => void
   /** When set, an "Investigate" row tails the list while there is free text,
-   *  handing the words to the host's AI investigation composer as a question.
-   *  It is last so a resource or command match always comes first. */
-  onInvestigateQuery?: (text: string) => void
+   *  handing the words, and any `ns:` modifiers as where to start, to the
+   *  host's AI investigation composer as a question. It is last so a
+   *  resource or command match always comes first. */
+  onInvestigateQuery?: (query: { text: string; namespaces: string[] }) => void
   /** Empty-launcher content. `true` (default) lists Views + Actions — the
    *  cmd-K menu. `false` shows only Actions so recents/search lead and views
    *  surface on type (use when the views are already always-visible, e.g. a
@@ -157,7 +158,7 @@ type Row =
   | { id: string; kind: 'resource'; hit: SearchHit; recent?: boolean }
   | { id: string; kind: 'command'; command: CommandItem }
   | { id: string; kind: 'viewAll'; query: string; count: number }
-  | { id: string; kind: 'investigate'; text: string }
+  | { id: string; kind: 'investigate'; text: string; namespaces: string[] }
 
 const COMMAND_CATEGORY_ORDER = ['Views', 'Resource Kinds', 'Namespaces', 'Clusters', 'Actions']
 const PAGE = 8
@@ -337,10 +338,15 @@ export const Omnibar = forwardRef<OmnibarHandle, OmnibarProps>(function Omnibar(
       out.push({ id: 'view-all', kind: 'viewAll', query: queryString, count: searchData?.total_matched ?? resourceRows.length })
     }
     if (onInvestigateQuery && freeText) {
-      out.push({ id: 'investigate', kind: 'investigate', text: freeText })
+      out.push({
+        id: 'investigate',
+        kind: 'investigate',
+        text: freeText,
+        namespaces: pills.filter((pill) => pill.key === 'ns').map((pill) => pill.value),
+      })
     }
     return out
-  }, [recentRows, leadingKinds, resourceRows, commandGroups, freeText, pills.length, searchActive, onViewAllResults, onInvestigateQuery, queryString, searchData])
+  }, [recentRows, leadingKinds, resourceRows, commandGroups, freeText, pills, searchActive, onViewAllResults, onInvestigateQuery, queryString, searchData])
   const viewAllRow = rows.find((r): r is Extract<Row, { kind: 'viewAll' }> => r.kind === 'viewAll')
   const investigateRow = rows.find((r): r is Extract<Row, { kind: 'investigate' }> => r.kind === 'investigate')
 
@@ -396,7 +402,7 @@ export const Omnibar = forwardRef<OmnibarHandle, OmnibarProps>(function Omnibar(
     } else if (row.kind === 'viewAll') {
       onViewAllResults?.(row.query)
     } else if (row.kind === 'investigate') {
-      onInvestigateQuery?.(row.text)
+      onInvestigateQuery?.({ text: row.text, namespaces: row.namespaces })
     } else {
       const h = row.hit
       recordRecent?.({ kind: h.kind, group: h.group, namespace: h.namespace, name: h.name, cluster: h.cluster, clusterName: h.clusterName })
