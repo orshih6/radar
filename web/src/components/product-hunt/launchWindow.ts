@@ -16,6 +16,8 @@ export const FALLBACK_LAUNCH: ProductHuntLaunch = {
 export const LAUNCH_NOTICE_DISMISSED_EVENT = 'radar:product-hunt-notice-dismissed'
 // Sent by the sidebar's Product Hunt item to bring a dismissed card back.
 export const LAUNCH_NOTICE_REOPEN_EVENT = 'radar:product-hunt-notice-reopen'
+// The sidebar item the card opens from and closes into.
+export const LAUNCH_RAIL_ITEM_ID = 'product-hunt-rail-item'
 
 export type LaunchPhase = 'upcoming' | 'live'
 

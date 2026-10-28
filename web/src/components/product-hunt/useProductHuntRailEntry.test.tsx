@@ -10,7 +10,6 @@ vi.mock('../../api/client', () => ({
 }))
 
 import { useProductHuntRailEntry } from './useProductHuntRailEntry'
-import { FALLBACK_LAUNCH, markPhaseDismissed } from './launchWindow'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root
@@ -41,12 +40,9 @@ afterEach(() => {
 })
 
 describe('useProductHuntRailEntry', () => {
-  it('appears once the card is closed, and reopens it', () => {
-    const launch = { ...FALLBACK_LAUNCH }
+  it('is there for the launch window, and opens the card', () => {
     mount()
-    expect(entry()).toBeUndefined()
-    act(() => markPhaseDismissed(launch, 'live'))
-    expect(entry()).toBeDefined()
+    expect(entry()?.id).toBe('product-hunt-rail-item')
     const reopen = vi.fn()
     window.addEventListener('radar:product-hunt-notice-reopen', reopen)
     entry()?.onOpen()
@@ -56,7 +52,6 @@ describe('useProductHuntRailEntry', () => {
   it('stays away in-cluster before the day and after the window', () => {
     state.mode = 'in-cluster'
     vi.setSystemTime(new Date('2026-10-28T17:00:00Z'))
-    markPhaseDismissed(FALLBACK_LAUNCH, 'upcoming')
     mount()
     expect(entry()).toBeUndefined()
     act(() => root.unmount())

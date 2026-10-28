@@ -1,12 +1,13 @@
 import { useEffect, useReducer, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { clsx } from 'clsx'
 import { Heart, Rocket, X } from 'lucide-react'
 import { useCapabilities, useVersionCheck } from '../../api/client'
 import type { UsageDataStatus } from '../../api/usage-data'
 import { USAGE_PROMPT_VISIBILITY_EVENT, updateNoticeVisible, usagePromptOnScreen } from '../usage-data/UsageDataPrompt'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
-import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
-import { LAUNCH_NOTICE_REOPEN_EVENT, isPhaseDismissed, launchDayLabel, launchPhase, launchShownIn, markPhaseDismissed, resolveLaunch, type LaunchPhase, type ProductHuntLaunch } from './launchWindow'
+import { TRANSITION_MENU } from '../../utils/animation'
+import { LAUNCH_NOTICE_REOPEN_EVENT, LAUNCH_RAIL_ITEM_ID, isPhaseDismissed, launchDayLabel, launchPhase, launchShownIn, markPhaseDismissed, resolveLaunch, type LaunchPhase, type ProductHuntLaunch } from './launchWindow'
 
 // The same tag for every install: it says the click came from inside Radar,
 // nothing about who clicked.
@@ -14,6 +15,9 @@ const UTM = { utm_source: 'radar-oss', utm_medium: 'app', utm_campaign: 'ph-laun
 const FEATURE_URL = `https://radarhq.io/product/ai-investigations?${new URLSearchParams(UTM)}`
 const SHOW_DELAY_MS = 10_000
 const LAUNCH_RECHECK_MS = 60 * 60_000
+// Long enough to read as growing out of the sidebar item, not snapping in.
+const ENTER_MS = 320
+const EXIT_MS = 220
 
 export function shouldShowLaunchNotice(opts: {
   phase: LaunchPhase | null
@@ -91,7 +95,31 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || usageDataPending || !!usageData?.firstRunPrompt
     ))),
   })
-  const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
+  const { shouldRender, isOpen } = useAnimatedUnmount(show, EXIT_MS)
+  // Beside the sidebar's Product Hunt item, growing out of it; the bottom-right
+  // corner when the sidebar isn't there (narrow windows, embedded).
+  const [anchor, setAnchor] = useState<{ left: number; bottom: number } | null>(null)
+  useEffect(() => {
+    if (!shouldRender) return
+    const item = document.getElementById(LAUNCH_RAIL_ITEM_ID)
+    let frame = 0
+    const place = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const r = item?.getBoundingClientRect()
+        setAnchor(r && r.width > 0 ? { left: r.right + 8, bottom: Math.max(16, window.innerHeight - r.bottom) } : null)
+      })
+    }
+    place()
+    const observer = item && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    if (item) observer?.observe(item)
+    window.addEventListener('resize', place)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', place)
+    }
+  }, [shouldRender])
   // What the card last showed, kept through the exit fade: the day can end, or
   // the launch be called off, while it is on screen.
   const [shown, setShown] = useState<{ phase: LaunchPhase; launch: ProductHuntLaunch } | null>(null)
@@ -106,18 +134,23 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
     rerender()
   }
 
+  const placement: CSSProperties = anchor
+    ? { left: anchor.left, bottom: anchor.bottom, maxWidth: `calc(100vw - ${anchor.left + 16}px)` }
+    : { right: 16, bottom: 16, maxWidth: 'calc(100vw - 2rem)' }
+
   return (
     <div
       role="dialog"
       aria-label="Radar on Product Hunt"
       inert={!show || undefined}
       className={clsx(
-        'launch-border fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/40 dark:border-emerald-400/30 shadow-[0_10px_40px_-6px_rgba(16,185,129,0.6)] dark:shadow-[0_10px_40px_-8px_rgba(16,185,129,0.45)] origin-bottom-right',
+        'launch-border fixed z-40 w-[24rem] rounded-xl border border-emerald-500/40 dark:border-emerald-400/30 shadow-[0_10px_40px_-6px_rgba(16,185,129,0.6)] dark:shadow-[0_10px_40px_-8px_rgba(16,185,129,0.45)]',
+        anchor ? 'origin-bottom-left' : 'origin-bottom-right',
         TRANSITION_MENU,
-        isOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.97]',
+        isOpen ? 'opacity-100 translate-x-0 translate-y-0 scale-100' : anchor ? 'opacity-0 -translate-x-3 scale-75' : 'opacity-0 translate-y-1 scale-[0.97]',
         !show && 'pointer-events-none',
       )}
-      style={overlayTransitionStyle(isOpen, 'menu')}
+      style={{ ...placement, transitionDuration: `${isOpen ? ENTER_MS : EXIT_MS}ms` }}
     >
       <div className="relative flex gap-3 p-4 rounded-[11px] overflow-hidden bg-theme-surface bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
         <button

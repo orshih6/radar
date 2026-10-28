@@ -101,8 +101,8 @@ interface PrimaryNavRailProps {
   accountSlot?: ReactNode;
   // Present only when release notes exist for this version; unread adds a dot.
   whatsNew?: { unread: boolean; onOpen: () => void };
-  // Present during the Product Hunt launch once its card was closed; reopens it.
-  productHunt?: { onOpen: () => void };
+  // Present during the Product Hunt launch: the launch card opens from it.
+  productHunt?: { onOpen: () => void; id: string };
 }
 
 export function PrimaryNavRail({
@@ -172,6 +172,7 @@ export function PrimaryNavRail({
             pinned={pinned}
             onClick={productHunt.onOpen}
             iconClassName="text-emerald-600 dark:text-emerald-400"
+            id={productHunt.id}
           />
         )}
         {whatsNew && (
@@ -365,6 +366,7 @@ export function RailActionRow({
   onClick,
   unread = false,
   iconClassName,
+  id,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
@@ -372,11 +374,13 @@ export function RailActionRow({
   onClick: () => void;
   unread?: boolean;
   iconClassName?: string;
+  id?: string;
 }) {
   return (
     <div className={clsx("group/item relative", !pinned && "w-10")}>
       <button
         type="button"
+        id={id}
         onClick={onClick}
         className={clsx(
           "relative flex h-9 w-full items-center rounded-md text-sm font-medium text-theme-text-secondary hover:bg-theme-hover hover:text-theme-text-primary transition-colors",
