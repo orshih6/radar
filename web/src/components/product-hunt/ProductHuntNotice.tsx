@@ -135,8 +135,8 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
   }
 
   const placement: CSSProperties = anchor
-    ? { left: anchor.left, bottom: anchor.bottom, maxWidth: `calc(100vw - ${anchor.left + 16}px)` }
-    : { right: 16, bottom: 16, maxWidth: 'calc(100vw - 2rem)' }
+    ? { left: anchor.left, bottom: anchor.bottom, maxWidth: `calc(100vw - ${anchor.left + 16}px)`, maxHeight: `calc(100vh - ${anchor.bottom + 16}px)` }
+    : { right: 16, bottom: 16, maxWidth: 'calc(100vw - 2rem)', maxHeight: 'calc(100vh - 2rem)' }
 
   return (
     <div
@@ -152,7 +152,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       )}
       style={{ ...placement, transitionDuration: `${isOpen ? ENTER_MS : EXIT_MS}ms` }}
     >
-      <div className="relative flex gap-3 p-4 rounded-[11px] overflow-hidden bg-theme-surface bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
+      <div className="relative flex gap-3 p-4 rounded-[11px] max-h-[inherit] overflow-y-auto bg-theme-surface bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
         <button
           type="button"
           onClick={dismiss}

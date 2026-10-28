@@ -44,6 +44,7 @@ describe('useProductHuntRailEntry', () => {
   it('is there for the launch window, and opens the card', () => {
     mount()
     expect(entry()?.id).toBe('product-hunt-rail-item')
+    expect(entry()?.badge).toBe('Today')
     const reopen = vi.fn()
     window.addEventListener('radar:product-hunt-notice-reopen', reopen)
     entry()?.onOpen()
@@ -58,6 +59,10 @@ describe('useProductHuntRailEntry', () => {
     act(() => root.unmount())
 
     state.mode = 'local'
+    mount()
+    expect(entry()?.badge).toBe('Oct 29')
+    act(() => root.unmount())
+
     vi.setSystemTime(new Date('2026-10-30T17:00:00Z'))
     mount()
     expect(entry()).toBeUndefined()

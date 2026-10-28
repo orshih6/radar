@@ -102,7 +102,7 @@ interface PrimaryNavRailProps {
   // Present only when release notes exist for this version; unread adds a dot.
   whatsNew?: { unread: boolean; onOpen: () => void };
   // Present during the Product Hunt launch: the launch card opens from it.
-  productHunt?: { onOpen: () => void; id: string };
+  productHunt?: { onOpen: () => void; id: string; badge: string };
 }
 
 export function PrimaryNavRail({
@@ -173,6 +173,7 @@ export function PrimaryNavRail({
             onClick={productHunt.onOpen}
             iconClassName="text-emerald-600 dark:text-emerald-400"
             id={productHunt.id}
+            badge={productHunt.badge}
           />
         )}
         {whatsNew && (
@@ -367,6 +368,7 @@ export function RailActionRow({
   unread = false,
   iconClassName,
   id,
+  badge,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
@@ -375,6 +377,8 @@ export function RailActionRow({
   unread?: boolean;
   iconClassName?: string;
   id?: string;
+  // A small tilted tag on the corner, for an item that's only here for now.
+  badge?: string;
 }) {
   return (
     <div className={clsx("group/item relative", !pinned && "w-10")}>
@@ -398,9 +402,18 @@ export function RailActionRow({
         </span>
         <span className={clsx("pr-3 truncate", !pinned && "opacity-0", unread && "text-theme-text-primary")}>
           {label}
+          {badge && <span className="sr-only"> ({badge})</span>}
           {unread && <span className="sr-only"> (unread)</span>}
         </span>
       </button>
+      {badge && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -top-1 -right-1 rotate-12 rounded-sm bg-emerald-500 px-1 text-[8px] font-bold uppercase leading-3 tracking-wide text-white shadow-sm dark:text-emerald-950"
+        >
+          {badge}
+        </span>
+      )}
       {!pinned && (
         <span
           aria-hidden
