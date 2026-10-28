@@ -405,7 +405,11 @@ func TestHandleDiagnoseMetricsOmittedWhenWorkloadReadDenied(t *testing.T) {
 	getPermCache().Get("scoped", nil).SetCanI("get", "apps", "deployments", "alpha", false)
 
 	result, metrics := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
-	if result.Resource == nil || result.Pods == 0 {
+	var pods int
+	if err := json.Unmarshal(result["pods"], &pods); err != nil {
+		t.Fatal(err)
+	}
+	if len(result["resource"]) == 0 || string(result["resource"]) == "null" || pods == 0 {
 		t.Fatalf("namespace-visible cached evidence was withheld: %+v", result)
 	}
 	if metrics != nil {
