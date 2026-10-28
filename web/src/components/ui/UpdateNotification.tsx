@@ -17,6 +17,7 @@ import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../ut
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { IN_CLUSTER_UPGRADE_URL } from '../../utils/version'
 import { LAUNCH_NOTICE_DISMISSED_EVENT, launchNoticeHoldsCorner, launchPhase, resolveLaunch } from '../product-hunt/launchWindow'
+import { USAGE_PROMPT_VISIBILITY_EVENT, usagePromptOnScreen } from '../usage-data/UsageDataPrompt'
 
 const DISMISSED_KEY = 'radar-update-dismissed'
 
@@ -119,12 +120,20 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
     }
   }, [versionInfo?.error])
 
-  // Check if this version was already dismissed
+  // Dismissal is per release: a newer one found while the page is open shows again.
   useEffect(() => {
-    if (versionInfo?.latestVersion && isUpdateDismissed(versionInfo.latestVersion)) {
-      setDismissed(true)
-    }
+    if (versionInfo?.latestVersion) setDismissed(isUpdateDismissed(versionInfo.latestVersion))
   }, [versionInfo?.latestVersion])
+
+  // The first-run usage card shares the corner; an update found while it is
+  // open waits for it.
+  const [usagePromptShowing, setUsagePromptShowing] = useState(usagePromptOnScreen)
+  useEffect(() => {
+    if (inSettings) return
+    const onUsagePrompt = () => setUsagePromptShowing(usagePromptOnScreen())
+    window.addEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+    return () => window.removeEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+  }, [inSettings])
 
   // Stop polling when update reaches a terminal state
   useEffect(() => {
@@ -167,7 +176,7 @@ export function UpdateNotification({ placement = 'floating' }: { placement?: 'fl
   // Shared in-cluster viewers get a persistent Home notice instead of a
   // floating action prompt they may not be able to act on.
   const available = !!versionInfo?.updateAvailable && deploymentMode !== undefined && deploymentMode !== 'cloud'
-  const show = available && deploymentMode !== 'in-cluster' && (inSettings ? expanded : !dismissed && !launchHoldsCorner)
+  const show = available && deploymentMode !== 'in-cluster' && (inSettings ? expanded : !dismissed && !launchHoldsCorner && !usagePromptShowing)
   // Presence outlives `show` by the menu exit so a dismiss fades the chip out
   // instead of snapping it away; the enter runs the same transition in reverse.
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
