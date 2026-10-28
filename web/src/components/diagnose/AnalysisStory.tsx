@@ -377,8 +377,15 @@ export function AnalysisStory({
         ? width >= STORY_FOLD_BELOW_WIDTH
         : width >= STORY_OPEN_MIN_WIDTH;
       // Folding would make the focused element inert and drop keyboard
-      // focus; a reader working inside the story keeps it open.
-      if (wideRef.current && !next && element.contains(document.activeElement))
+      // focus; a reader working in what the fold hides keeps it open.
+      const focused = document.activeElement;
+      if (
+        wideRef.current &&
+        !next &&
+        focused &&
+        element.contains(focused) &&
+        focused.closest("[data-story-folds]")
+      )
         setChoice((current) => current ?? true);
       wideRef.current = next;
       setWide(next);
@@ -529,7 +536,9 @@ export function AnalysisStory({
       <div id={regionId}>
         {before.length > 0 ? (
           <Collapse key={`before-${collapseKey}`} open={open} mountLazily>
-            <div className="space-y-2 pb-2">{before}</div>
+            <div data-story-folds className="space-y-2 pb-2">
+              {before}
+            </div>
           </Collapse>
         ) : null}
         <div className="space-y-2">{preview}</div>
@@ -569,7 +578,7 @@ export function AnalysisStory({
         ) : null}
         {after.length > 0 || trailing ? (
           <Collapse key={`after-${collapseKey}`} open={open} mountLazily>
-            <div className="space-y-2 pt-2">
+            <div data-story-folds className="space-y-2 pt-2">
               {after}
               {trailing}
             </div>

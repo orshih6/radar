@@ -168,6 +168,15 @@ describe("AnalysisStory at reading width", () => {
     expect(isOpen()).toBe(true);
   });
 
+  it("still folds for width when focus is on something the fold keeps visible", () => {
+    mount(900);
+    act(() => toggle().focus());
+    resize(500);
+    expect(isOpen()).toBe(false);
+    resize(900);
+    expect(isOpen()).toBe(true);
+  });
+
   it("keeps the reader's fold choice whatever the width does", () => {
     mount(900);
     act(() => toggle().click());
