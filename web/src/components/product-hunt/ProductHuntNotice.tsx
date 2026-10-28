@@ -105,14 +105,14 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       aria-label="Radar on Product Hunt"
       inert={!show || undefined}
       className={clsx(
-        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/50 dark:border-emerald-400/40 bg-theme-surface shadow-[0_8px_32px_-8px_rgba(16,185,129,0.45)] overflow-hidden origin-bottom-right',
+        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/70 dark:border-emerald-400/60 bg-theme-surface shadow-[0_10px_40px_-6px_rgba(16,185,129,0.55)] overflow-hidden origin-bottom-right',
         TRANSITION_MENU,
         isOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.97]',
         !show && 'pointer-events-none',
       )}
       style={overlayTransitionStyle(isOpen, 'menu')}
     >
-      <div className="relative flex gap-3 p-4 pr-10 bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
+      <div className="launch-sweep relative flex gap-3 p-4 pr-10 bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
         <button
           type="button"
           onClick={dismiss}
@@ -122,7 +122,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
           <X className="w-3.5 h-3.5" />
         </button>
         <span className="flex items-center justify-center w-9 h-9 shrink-0 rounded-lg bg-emerald-500 text-white shadow-[0_4px_14px_-4px_rgba(16,185,129,0.6)]">
-          <Rocket className="w-4 h-4" aria-hidden />
+          <Rocket className="w-4 h-4 animate-launch-rocket" aria-hidden />
         </span>
         <div className="min-w-0">
           <p className="flex items-center gap-1.5 text-sm font-medium text-theme-text-primary">
