@@ -221,4 +221,19 @@ describe("QuestionComposer", () => {
         ?.textContent,
     ).toBe("6h");
   });
+
+  it("clears a question that became a run, but not newer words", async () => {
+    state.questionDraft = { seq: 1, text: "question A" };
+    await render();
+    state.questionDraft = { seq: 2, consumed: "question A" };
+    await render();
+    expect(textarea().value).toBe("");
+
+    state.questionDraft = { seq: 3, text: "question A" };
+    await render();
+    await type("question B");
+    state.questionDraft = { seq: 4, consumed: "question A" };
+    await render();
+    expect(textarea().value).toBe("question B");
+  });
 });

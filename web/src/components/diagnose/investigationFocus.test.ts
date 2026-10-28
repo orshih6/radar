@@ -100,6 +100,48 @@ describe("focusFromCase", () => {
     ]);
   });
 
+  it("keeps the exact kind Radar recorded", () => {
+    const cause = item("cause", "get_resource", { kind: "podmetrics" });
+    cause.observation = {
+      data: {
+        type: "resource",
+        resource: {
+          apiVersion: "metrics.k8s.io/v1beta1",
+          kind: "PodMetrics",
+          metadata: { namespace: "shop", name: "api-0" },
+        },
+        warnings: [],
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([cause]))).toEqual([
+      {
+        kind: "PodMetrics",
+        group: "metrics.k8s.io",
+        namespace: "shop",
+        name: "api-0",
+      },
+    ]);
+  });
+
+  it("names the pod a cited log stream came from", () => {
+    const symptom = item("symptom", "diagnose", {
+      kind: "Deployment",
+      namespace: "shop",
+      name: "api",
+    });
+    symptom.observation = {
+      data: {
+        type: "logs",
+        pod: "api-123",
+        namespace: "shop",
+        previous: false,
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([symptom]))).toEqual([
+      { kind: "Pod", group: "", namespace: "shop", name: "api-123" },
+    ]);
+  });
+
   it("spells an agent's lowercase kind the Kubernetes way", () => {
     expect(
       focusFromCase(

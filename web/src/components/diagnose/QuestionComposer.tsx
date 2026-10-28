@@ -98,6 +98,13 @@ export function QuestionComposer({
   useEffect(() => {
     if (!questionDraft || questionDraft.seq === appliedSeq.current) return;
     appliedSeq.current = questionDraft.seq;
+    if (questionDraft.consumed !== undefined) {
+      if (unsent.current.text.trim() === questionDraft.consumed) {
+        setText("");
+        setPin(null);
+      }
+      return;
+    }
     setText(questionDraft.text ?? "");
     setPin(questionDraft.pin ?? null);
     if (questionDraft.namespaces) setNamespaces(questionDraft.namespaces);

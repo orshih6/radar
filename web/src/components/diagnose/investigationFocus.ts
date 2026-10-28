@@ -1,13 +1,12 @@
-import {
-  apiVersionToGroup,
-  kindToPluralWithGroup,
-  pluralToKind,
-} from "../../utils/navigation";
+import { kindToPluralWithGroup, pluralToKind } from "../../utils/navigation";
 import type {
   InvestigationCaseItem,
   InvestigationCaseResolution,
 } from "./investigationCase";
-import { investigationSourceArgs } from "./investigationEvidence/identity";
+import {
+  investigationEvidenceSubjectRef,
+  investigationSourceArgs,
+} from "./investigationEvidence/identity";
 import { runTargetKey, type InvestigationTargetIdentity } from "./target";
 
 // Reads that are about exactly the resource their arguments name. A broad
@@ -24,8 +23,8 @@ const SINGLE_RESOURCE_TOOLS = new Set([
 
 // The resources a question-only assessment came to rest on, causes first.
 // Each is named by what Radar produced, never by what the agent wrote: the
-// resource or issue the citation bound to, or else the resource a
-// single-resource read was asked about.
+// object the citation bound to, or else the resource a single-resource read
+// was asked about.
 export function focusFromCase(
   investigationCase: InvestigationCaseResolution | undefined,
   max = 3,
@@ -53,28 +52,19 @@ export function focusFromCase(
   return focus;
 }
 
+// What the citation bound to, exactly as Radar recorded it.
 function boundResource(
   item: InvestigationCaseItem,
 ): InvestigationTargetIdentity | undefined {
   const data = item.observation?.data;
-  if (data?.type === "resource" && data.resource.metadata?.name) {
-    const group = apiVersionToGroup(data.resource.apiVersion);
-    return identity(
-      data.resource.kind,
-      group,
-      data.resource.metadata.namespace ?? "",
-      data.resource.metadata.name,
-    );
-  }
-  if (data?.type === "issue" && data.issue.name) {
-    return identity(
-      data.issue.kind,
-      data.issue.group ?? "",
-      data.issue.namespace ?? "",
-      data.issue.name,
-    );
-  }
-  return undefined;
+  const ref = data ? investigationEvidenceSubjectRef(data) : undefined;
+  if (!ref?.kind || !ref.name) return undefined;
+  return {
+    kind: ref.kind,
+    group: ref.group ?? "",
+    namespace: ref.namespace ?? "",
+    name: ref.name,
+  };
 }
 
 function readResource(
@@ -93,26 +83,13 @@ function readResource(
         ? args.kind
         : "";
   if (!name || !kind) return undefined;
-  return identity(
-    kind,
-    typeof args?.group === "string" ? args.group : "",
-    typeof args?.namespace === "string" ? args.namespace : "",
-    name,
-  );
-}
-
-// Agents spell kinds every way kubectl accepts: deployment, deployments,
-// Deployment. The server canonicalizes the group when a run starts.
-function identity(
-  kind: string,
-  group: string,
-  namespace: string,
-  name: string,
-): InvestigationTargetIdentity {
+  const group = typeof args?.group === "string" ? args.group : "";
+  // Agents spell kinds every way kubectl accepts: deployment, deployments,
+  // Deployment. The server canonicalizes the group when a run starts.
   return {
     kind: pluralToKind(kindToPluralWithGroup(kind, group)),
     group,
-    namespace,
+    namespace: typeof args?.namespace === "string" ? args.namespace : "",
     name,
   };
 }

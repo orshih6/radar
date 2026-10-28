@@ -75,6 +75,9 @@ export interface QuestionDraft {
   pin?: { kind: string; group: string; namespace: string; name: string };
   namespaces?: string[];
   lookBack?: string;
+  /** A question that became a run. A composer still showing exactly these
+   *  words clears; one holding newer words keeps them. */
+  consumed?: string;
 }
 
 // Setup readiness of local AI investigations, derived from the agents API:
@@ -825,7 +828,12 @@ function RoutedDiagnoseProvider({
           prev.some((r) => r.id === run.id) ? prev : [run, ...prev],
         );
         if (seq !== startSeqRef.current) return;
-        if (t.question) setQuestionDraft(null);
+        if (t.question) {
+          setQuestionDraft((previous) => ({
+            seq: (previous?.seq ?? 0) + 1,
+            consumed: t.question,
+          }));
+        }
         setActiveRunId(run.id);
         setView("investigation");
         writeFocusedRunID(run.id, true);
