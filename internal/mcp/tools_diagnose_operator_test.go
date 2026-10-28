@@ -96,7 +96,7 @@ func initOperatorDiagnosisCache(t *testing.T, root *unstructured.Unstructured, o
 	}
 }
 
-func TestOperatorDiagnoseWithholdsDeniedPodAndEventEvidence(t *testing.T) {
+func TestOperatorDiagnoseCachedEvidenceUsesNamespaceVisibility(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
 		pods, events bool
@@ -128,11 +128,11 @@ func TestOperatorDiagnoseWithholdsDeniedPodAndEventEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			text := extractText(t, result)
-			if !tc.events && strings.Contains(text, "restricted-event-marker") {
-				t.Fatalf("denied event leaked: %s", text)
+			if !strings.Contains(text, "restricted-event-marker") {
+				t.Fatalf("namespace-visible Event evidence was withheld: %s", text)
 			}
-			if !tc.pods && strings.Contains(text, "restricted-pod-marker") {
-				t.Fatalf("denied Pod leaked: %s", text)
+			if !strings.Contains(text, "restricted-pod-marker") {
+				t.Fatalf("namespace-visible Pod membership was withheld: %s", text)
 			}
 			var got operatorDiagnoseResponse
 			if err := json.Unmarshal([]byte(text), &got); err != nil {
@@ -142,15 +142,56 @@ func TestOperatorDiagnoseWithholdsDeniedPodAndEventEvidence(t *testing.T) {
 				t.Fatalf("readable workload lost its partial bundle: %s", text)
 			}
 			bundle := got.OwnedWorkloads[0].Diagnosis
-			if tc.pods && tc.events && (!strings.Contains(text, "restricted-event-marker") || len(bundle.RelatedIssues) == 0) {
+			if len(bundle.RelatedIssues) == 0 {
 				t.Fatalf("positive control did not exercise Event-derived Issues: %+v", bundle)
 			}
-			if !tc.events && (bundle.EventsError == "" || len(bundle.Events) > 0 || len(bundle.StartupBlockers) > 0 || len(bundle.RelatedIssues) > 0) {
-				t.Fatalf("denied event-derived evidence returned: %+v", bundle)
+			if bundle.EventsError != "" {
+				t.Fatalf("cached Events should use namespace visibility: %+v", bundle)
 			}
-			if !tc.pods && (bundle.Pods != 0 || len(bundle.PodNames) > 0 || len(bundle.Warnings) == 0) {
-				t.Fatalf("denied Pod membership not qualified: %+v", bundle)
+			if bundle.Pods != 1 || len(bundle.PodNames) != 1 {
+				t.Fatalf("namespace-visible membership changed with per-kind grants: %+v", bundle)
 			}
 		})
+	}
+}
+
+func TestWorkloadDiagnoseNamespacePolicyMatchesResourceRead(t *testing.T) {
+	yes := true
+	root := &unstructured.Unstructured{Object: map[string]any{"apiVersion": "opentelemetry.io/v1beta1", "kind": "OpenTelemetryCollector", "metadata": map[string]any{"name": "collector", "namespace": "observe", "uid": "root"}}}
+	deployment := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "runtime", Namespace: "observe", UID: "deployment"}, Spec: appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "runtime"}}}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "runtime-rs", Namespace: "observe", UID: "rs", OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "Deployment", Name: "runtime", UID: "deployment", Controller: &yes}}}, Spec: appsv1.ReplicaSetSpec{Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "runtime"}}}}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "runtime-pod", Namespace: "observe", UID: "pod", Labels: map[string]string{"app": "runtime"}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: "runtime-rs", UID: "rs", Controller: &yes}}}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app"}}}}
+	event := &corev1.Event{ObjectMeta: metav1.ObjectMeta{Name: "blocked", Namespace: "observe"}, Type: "Warning", Reason: "FailedCreate", Message: `admission webhook "fixture" denied the request: namespace-evidence-marker`, InvolvedObject: corev1.ObjectReference{APIVersion: "apps/v1", Kind: "ReplicaSet", Namespace: "observe", Name: "runtime-rs", UID: "rs"}}
+	initOperatorDiagnosisCache(t, root, deployment, rs, pod, event)
+	ctx := withTestUserPerms(t, "namespace-reader", nil, []string{"observe"})
+	perms := getPermCache().Get("namespace-reader", nil)
+	perms.SetCanI("get", "apps", "deployments", "observe", false)
+	perms.SetCanI("list", "", "pods", "observe", false)
+	perms.SetCanI("list", "", "events", "observe", false)
+	gotResource, _, err := handleGetResource(ctx, nil, getResourceInput{Kind: "Deployment", Group: "apps", Namespace: "observe", Name: "runtime", Include: "issues"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotDiagnosis, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "observe", "runtime"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for surface, result := range map[string]string{"get_resource": extractText(t, gotResource), "diagnose": extractText(t, gotDiagnosis)} {
+		if !strings.Contains(result, "namespace-evidence-marker") {
+			t.Fatalf("%s withheld namespace-visible evidence: %s", surface, result)
+		}
+	}
+	var diagnosis diagnoseResponse
+	if err := json.Unmarshal([]byte(extractText(t, gotDiagnosis)), &diagnosis); err != nil {
+		t.Fatal(err)
+	}
+	if diagnosis.Pods != 1 || len(diagnosis.RelatedIssues) == 0 || len(diagnosis.StartupBlockers) == 0 {
+		t.Fatalf("incomplete cached workload evidence: %+v", diagnosis)
+	}
+	if diagnosis.LogsError == "" {
+		t.Fatal("unavailable live log client was not qualified")
+	}
+	if _, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "hidden", "runtime")); err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("namespace boundary was not enforced: %v", err)
 	}
 }

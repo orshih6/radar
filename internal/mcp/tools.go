@@ -222,25 +222,24 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 		Annotations: readOnly,
 	}, logToolCall("get_pod_logs", handleGetPodLogs))
 
-	diagnoseDescription := "Get bounded evidence for a workload, OpenTelemetryCollector/Canary, " +
-		"GitOps reconciler or network entry in one call; " +
-		"it does not run an agent and is not an authoritative root-cause verdict or an exhaustive account. " +
+	diagnoseDescription := "Get a bounded, point-in-time evidence bundle in one round-trip; " +
+		"it does not run an agent and is not an authoritative root-cause verdict. " +
 		"Use for CrashLoopBackOff, OOMKilled, image-pull, readiness, scheduling, GitOps sync/health, " +
 		"or traffic not reaching a service, route or ingress. Pod, Deployment, StatefulSet, DaemonSet and Argo Rollout " +
 		"bundle resource context, selected/capped current and previous logs, Warning events, startup blockers, " +
-		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector/Canary return root reconciliation and owned-workload bundles; Canary also includes its declared target. " +
-		"Warning events are a capped sample for the observed resource and Pods; UID-less evidence cannot prove an incarnation. Use get_events for a broader, dedicated event read, including history. " +
+		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector/Canary: root reconciliation and owned workloads; Canary adds declaredTarget. " +
+		"Warning events are a capped sample for this resource/Pods; UID-less evidence cannot prove incarnation. Use get_events for a broader, dedicated event read with history. " +
 		"`crashCause` is evidence, not a root-cause verdict. `logLineSelection` ranks " +
 		"`" + crashLineFatalPattern + "`, `" + crashLineHeaderOnly + "`, `" +
 		crashLineLastMatchedLine + "`, then `" + crashLineLogTail + "`. Inspect source logs for low-confidence " +
-		"selections; `traceback_header_only` means the informative line was not captured. " +
-		"`auditSummary.highestSeverity` uses static-posture critical|high|medium|low (built-ins high|medium), " +
-		"unlike live `issueSummary` critical|warning. `application_configuration_change: true` classifies an edit; " +
+		"results; `traceback_header_only` lacks the informative line. " +
+		"`auditSummary.highestSeverity`: static posture critical|high|medium|low (built-ins high|medium); " +
+		"live `issueSummary` critical|warning. `application_configuration_change: true` classifies an edit; " +
 		"it is not a causal or universal relevance verdict. Application, Kustomization and Flux HelmRelease return " +
 		"status and parsed issues; no logs. Network entries give per-route reachability evidence: trust " +
 		"`routes[].outcome` + `confidence` and `headline`/`diagnosis` over coarse `verdict`; `indirect` means only the " +
-		"API-server proxy reached it, not the live path. Point-in-time means frozen from this call, " +
-		"not that every source was read atomically; preserve collection limits, errors, timestamps, and confidence. " +
+		"API-server proxy reached it, not the live path. Point-in-time freezes this call's result, " +
+		"not that every source was read atomically; preserve limits, errors, timestamps and confidence. " +
 		"For one facet, prefer resource/log/event tools; use get_resource for other kinds."
 	if includeWrites {
 		tool := &mcp.Tool{
