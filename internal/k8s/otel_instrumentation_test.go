@@ -30,6 +30,7 @@ func TestAutoInstrumentationContextResolution(t *testing.T) {
 		{"true hidden namespace", "true", "shared/java", "unknown", "", 1, true, false, true},
 		{"false overrides", "false", "shared/java", "disabled", "", 1, true, false, false},
 		{"default one", "true", "", "default_resolved", "app", 1, true, false, false},
+		{"default inventory denied", "true", "", "unknown", "", 1, true, true, false},
 		{"default none", "true", "", "default_missing", "", 0, true, false, false},
 		{"default ambiguous", "true", "", "default_ambiguous", "", 2, true, false, false},
 		{"invalid named", "shared/a/b", "", "invalid_reference", "", 1, true, false, false},
@@ -72,6 +73,9 @@ func TestAutoInstrumentationContextResolution(t *testing.T) {
 			r := got.RequestsIfPodCreatedNow[0]
 			if tc.refNamespace != "" && (r.Instrumentation == nil || r.Instrumentation.Namespace != tc.refNamespace) {
 				t.Fatalf("wrong namespace: %+v", r)
+			}
+			if tc.name == "default inventory denied" && (!r.AssumesOperatorCRDMode || r.Instrumentation != nil || got.NamespaceDefaultsUnknown) {
+				t.Fatalf("unreadable default inventory lost its distinct qualifiers: %+v", got)
 			}
 			if tc.name == "true inherits name" && r.Source.Kind != "Namespace" {
 				t.Fatalf("lost native inheritance: %+v", r)
