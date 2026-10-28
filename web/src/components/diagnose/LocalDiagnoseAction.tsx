@@ -53,23 +53,24 @@ function DiagnoseResourceButton({
           : `Ask ${d.agentLabel} about this resource — reads its spec, events & logs.`
         : problem
           ? `Investigate with your own ${d.agentLabel} — runs locally and reads this resource's spec, events & logs.`
-          : `Ask your own ${d.agentLabel} about this resource — runs locally, reads its spec, events & logs.`;
+          : d.questions
+            ? `Ask your own ${d.agentLabel} a question about this resource — runs locally, reads its spec, events & logs.`
+            : `Ask your own ${d.agentLabel} about this resource — runs locally, reads its spec, events & logs.`;
   // While an investigation is live, the button advertises it (and clicking focuses
   // the existing run rather than starting a new one — openInvestigation dedups).
   const showLabel = problem || running;
+  const asks = d.questions && !problem && !running;
   return (
     <Tooltip content={tooltip} position="bottom">
       <button
-        onClick={() =>
-          ready
-            ? d.openInvestigation({
-                kind,
-                group: group ?? "",
-                namespace,
-                name,
-              })
-            : d.openHome()
-        }
+        onClick={() => {
+          const target = { kind, group: group ?? "", namespace, name };
+          if (!ready) d.openHome();
+          // Asking about a resource with no live problem means saying what
+          // to ask; a problem, or a run already live, opens straight away.
+          else if (asks) d.openQuestion({ pin: target });
+          else d.openInvestigation(target);
+        }}
         aria-label={
           !ready
             ? notReadyTooltip(d)

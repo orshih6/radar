@@ -1,0 +1,60 @@
+import { describe, expect, it } from "vitest";
+import type { Issue } from "@skyhook-io/k8s-ui";
+
+import { suggestionsFromIssues } from "./questionSuggestions";
+
+function issue(patch: Partial<Issue>): Issue {
+  return {
+    id: patch.name ?? "x",
+    severity: "warning",
+    source: "problem",
+    category: "crashloop",
+    category_group: "runtime",
+    grouping_scope: "workload",
+    kind: "Deployment",
+    group: "apps",
+    namespace: "shop",
+    name: "checkout",
+    reason: "CrashLoopBackOff",
+    ...patch,
+  } as Issue;
+}
+
+describe("suggestionsFromIssues", () => {
+  it("offers nothing when Radar sees nothing", () => {
+    expect(suggestionsFromIssues([])).toEqual([]);
+  });
+
+  it("pins a problem on one resource and scopes a shared one to its namespace", () => {
+    const suggestions = suggestionsFromIssues([
+      issue({ name: "checkout" }),
+      issue({ category: "image_pull_failed", namespace: "web", name: "a" }),
+      issue({ category: "image_pull_failed", namespace: "web", name: "b" }),
+    ]);
+    const one = suggestions.find((s) => s.pin);
+    expect(one?.pin).toEqual({
+      kind: "Deployment",
+      group: "apps",
+      namespace: "shop",
+      name: "checkout",
+    });
+    expect(one?.question).toContain("Deployment shop/checkout");
+    const shared = suggestions.find((s) => !s.pin);
+    expect(shared?.namespaces).toEqual(["web"]);
+    expect(shared?.question).toContain("on 2 resources in web");
+  });
+
+  it("puts the most severe problem first and stops at the cap", () => {
+    const suggestions = suggestionsFromIssues(
+      [
+        issue({ category: "a", name: "a" }),
+        issue({ category: "b", name: "b", severity: "critical" }),
+        issue({ category: "c", name: "c" }),
+        issue({ category: "d", name: "d" }),
+      ],
+      3,
+    );
+    expect(suggestions).toHaveLength(3);
+    expect(suggestions[0].pin?.name).toBe("b");
+  });
+});

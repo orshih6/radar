@@ -38,7 +38,7 @@ import {
   type AgentInfo,
   type ExecutionProfile,
 } from "../../api/diagnose";
-import { runTargetKey } from "./target";
+import { isQuestionOnly, runTargetKey } from "./target";
 import { knownKindForPluralWithGroup } from "../../utils/navigation";
 
 export interface Target {
@@ -55,8 +55,24 @@ export interface Target {
    *  the consent-deferred path replays one object — a parallel "was it fresh?"
    *  state is a thing that can fall out of sync with the target it describes. */
   fresh?: boolean;
+  /** The engineer's question. With an empty kind and name, the run is about
+   *  the question alone. */
+  question?: string;
+  namespaces?: string[];
+  lookBack?: string;
 }
 export type DiagnoseView = "home" | "investigation";
+
+// What the question composer opens with when something hands it a start:
+// the resource to pin, the words typed so far. seq makes a second hand-off
+// with the same content still land.
+export interface QuestionDraft {
+  seq: number;
+  text?: string;
+  pin?: { kind: string; group: string; namespace: string; name: string };
+  namespaces?: string[];
+  lookBack?: string;
+}
 
 // Setup readiness of local AI investigations, derived from the agents API:
 //  - "ready":         an agent is installed and the engine is running (available)
@@ -88,6 +104,7 @@ interface DiagnoseCtx {
   cliOverride: boolean;
   agentLabel: string; // label of the selected agent, e.g. "Claude Code"
   hosted: boolean; // selected agent runs on the host's backend, not this machine
+  questions: boolean; // the selected agent's backend opens a run from a question
   agents: AgentInfo[]; // supported agents detected on PATH (for the picker)
   selectedAgent: string; // name of the chosen backend ("claude"/"codex")
   setSelectedAgent: (name: string) => void;
@@ -104,6 +121,7 @@ interface DiagnoseCtx {
   runsLoadFailed: boolean; // latest runs fetch failed (poll keeps retrying)
   historyDegraded: boolean; // persistence broke — history won't survive a restart
   needsConsent: boolean; // a start is pending the one-time consent
+  pendingTarget: Target | null; // what that pending start is about
   startError: string | null;
   // The host's refusal behind startError, when it sent one, so the surface can
   // offer the host's action beside the message.
@@ -119,6 +137,9 @@ interface DiagnoseCtx {
   openInvestigation: (t: Target) => void;
   openRun: (id: string) => void;
   openHome: () => void;
+  // Opens Home's question composer with a resource pinned or words typed.
+  openQuestion: (draft: Omit<QuestionDraft, "seq">) => void;
+  questionDraft: QuestionDraft | null;
   openWorkspace: (runID?: string | null) => void;
   restoreWorkspace: () => void;
   canRestoreWorkspace: boolean;
@@ -491,6 +512,12 @@ function RoutedDiagnoseProvider({
   const [runsLoadFailed, setRunsLoadFailed] = useState(false);
   const [historyDegraded, setHistoryDegraded] = useState(false);
   const [pendingTarget, setPendingTarget] = useState<Target | null>(null);
+  // The question composer's content outside the composer, so a hand-off can
+  // fill it and a start that never became a run (consent cancelled, a refused
+  // start) hands the engineer's words back instead of losing them.
+  const [questionDraft, setQuestionDraft] = useState<QuestionDraft | null>(
+    null,
+  );
   const [startFailure, setStartFailure] = useState<{
     message: string;
     refusal: InvestigationRefusal | null;
@@ -744,6 +771,7 @@ function RoutedDiagnoseProvider({
   // so per-resource Investigate buttons only re-render when their live targets
   // change.
   const runningSig = runningRuns
+    .filter((r) => !isQuestionOnly(r))
     .map((r) => runTargetKey(r.kind, r.namespace, r.name, r.group))
     .sort()
     // resourceKey itself is pipe-delimited; newlines cannot occur in a
@@ -791,6 +819,7 @@ function RoutedDiagnoseProvider({
           prev.some((r) => r.id === run.id) ? prev : [run, ...prev],
         );
         if (seq !== startSeqRef.current) return;
+        if (t.question) setQuestionDraft(null);
         setActiveRunId(run.id);
         setView("investigation");
         writeFocusedRunID(run.id, true);
@@ -815,6 +844,22 @@ function RoutedDiagnoseProvider({
     (t: Target) => {
       setStartFailure(null);
       setConsentError(null);
+      if (t.question) {
+        setQuestionDraft((previous) => ({
+          seq: (previous?.seq ?? 0) + 1,
+          text: t.question,
+          pin: t.name
+            ? {
+                kind: t.kind,
+                group: t.group,
+                namespace: t.namespace,
+                name: t.name,
+              }
+            : undefined,
+          namespaces: t.namespaces,
+          lookBack: t.lookBack,
+        }));
+      }
       setOpen(true);
       if (!hosted && !consentSurface) {
         setPendingTarget(null);
@@ -974,6 +1019,16 @@ function RoutedDiagnoseProvider({
     setOpen(true);
     writeFocusedRunID(null, false);
   }, [writeFocusedRunID]);
+  const openQuestion = useCallback(
+    (draft: Omit<QuestionDraft, "seq">) => {
+      setQuestionDraft((previous) => ({
+        ...draft,
+        seq: (previous?.seq ?? 0) + 1,
+      }));
+      openHome();
+    },
+    [openHome],
+  );
   const openWorkspace = useCallback(
     (preferredRunID?: string | null) => {
       setOpen(true);
@@ -1129,6 +1184,7 @@ function RoutedDiagnoseProvider({
     cliOverride,
     agentLabel,
     hosted,
+    questions: selectedAgentInfo?.questions === true,
     agents,
     selectedAgent,
     setSelectedAgent,
@@ -1147,6 +1203,7 @@ function RoutedDiagnoseProvider({
     // pendingTarget is set ONLY when the current agent's consent is missing, and
     // cleared on approve/cancel — so its presence is exactly "consent needed now".
     needsConsent: !!pendingTarget,
+    pendingTarget,
     startError: startFailure?.message ?? null,
     startRefusal: startFailure?.refusal ?? null,
     startCapacity: startFailure?.capacity ?? null,
@@ -1154,6 +1211,8 @@ function RoutedDiagnoseProvider({
     openInvestigation,
     openRun,
     openHome,
+    openQuestion,
+    questionDraft,
     openWorkspace,
     restoreWorkspace,
     canRestoreWorkspace,

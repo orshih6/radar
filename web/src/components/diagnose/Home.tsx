@@ -14,8 +14,13 @@ import {
   pluralToKind,
 } from "@skyhook-io/k8s-ui/utils/navigation";
 import { parseContextName } from "../../utils/context-name";
-import { formatInvestigationTarget } from "./target";
+import {
+  formatInvestigationTitle,
+  formatQuestionScope,
+  isQuestionOnly,
+} from "./target";
 import { Tooltip } from "../ui/Tooltip";
+import { QuestionComposer } from "./QuestionComposer";
 
 function historyDay(date: Date, now: Date): string {
   if (date.toDateString() === now.toDateString()) return "Today";
@@ -116,13 +121,32 @@ export function statusWord(status: RunSummary["status"]): {
   }
 }
 
+// The run's latest headline as plain text: rows are too small for the
+// markdown a headline may carry.
+function previewText(preview: string | undefined): string {
+  return (preview ?? "")
+    .replace(/`|\*\*/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function InvestigationHome({
   agentLabel,
   onBrowseIssues,
+  questions = false,
 }: {
   agentLabel: string;
   onBrowseIssues?: () => void;
+  /** The backend opens a run from a question; offer the composer. */
+  questions?: boolean;
 }) {
+  if (questions) {
+    return (
+      <div className="flex min-h-full w-full items-start justify-center px-4 py-10 sm:px-6">
+        <QuestionComposer onBrowseIssues={onBrowseIssues} />
+      </div>
+    );
+  }
   return (
     <div className="flex min-h-full w-full items-center justify-center px-4 py-8 sm:px-6">
       <section className="mx-auto max-w-2xl text-center">
@@ -163,6 +187,9 @@ export function RecentList({
   selectedId,
   historyDegraded = false,
   currentContext,
+  loaded = true,
+  loadFailed = false,
+  onRetry,
 }: {
   agentLabel: string;
   runs: RunSummary[];
@@ -170,6 +197,12 @@ export function RecentList({
   selectedId?: string | null;
   historyDegraded?: boolean;
   currentContext?: string;
+  /** The first list response has arrived; until then an empty list means
+   *  nothing is known yet, not that there are no investigations. */
+  loaded?: boolean;
+  /** The latest list request failed. */
+  loadFailed?: boolean;
+  onRetry?: () => void;
 }) {
   const now = new Date();
   const contexts = new Map(
@@ -183,6 +216,7 @@ export function RecentList({
     contextsByName.set(parsed.clusterName, names);
   }
   for (const r of runs) {
+    if (isQuestionOnly(r)) continue;
     const kind = pluralToKind(r.kind);
     const groups = groupsByKind.get(kind) ?? new Set<string>();
     // Match Radar's resource-lane display convention: built-in API groups
@@ -223,6 +257,42 @@ export function RecentList({
       won&apos;t survive a restart.
     </div>
   ) : null;
+
+  if (runs.length === 0 && !loaded) {
+    return loadFailed ? (
+      <div className="flex flex-col items-center px-4 py-12 text-center">
+        <CircleAlert className="mb-3 h-6 w-6 text-theme-text-tertiary" />
+        <div className="text-sm font-medium text-theme-text-primary">
+          Couldn’t load investigations
+        </div>
+        <p className="mt-1 max-w-xs text-sm text-theme-text-tertiary">
+          Radar keeps retrying while this page is open.
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-3 rounded-md border border-theme-border px-2.5 py-1 text-xs text-theme-text-secondary hover:bg-theme-hover hover:text-theme-text-primary"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    ) : (
+      <div
+        role="status"
+        aria-label="Loading investigations"
+        className="space-y-3 px-2 py-4"
+      >
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="space-y-1.5">
+            <div className="h-3.5 w-2/3 animate-pulse rounded bg-theme-hover" />
+            <div className="h-3 w-1/3 animate-pulse rounded bg-theme-hover" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (runs.length === 0) {
     return (
@@ -292,12 +362,21 @@ export function RecentList({
                         })
                       ? `${parsed.account} · ${parsed.region}`
                       : r.context;
+                const questionOnly = isQuestionOnly(r);
+                const title = formatInvestigationTitle(r);
                 const readableKind = pluralToKind(r.kind);
-                const kind =
-                  groupsByKind.get(readableKind)!.size > 1
-                    ? `${readableKind} · ${r.group || "core"}`
-                    : readableKind;
-                const initialIssue = r.health?.topReason?.trim();
+                const where = questionOnly
+                  ? formatQuestionScope(r)
+                  : `${r.namespace ? `${r.namespace} · ` : ""}${
+                      groupsByKind.get(readableKind)!.size > 1
+                        ? `${readableKind} · ${r.group || "core"}`
+                        : readableKind
+                    }`;
+                const askedAbout = questionOnly ? "" : (r.question ?? "");
+                const initialIssue = questionOnly
+                  ? undefined
+                  : r.health?.topReason?.trim();
+                const found = previewText(r.preview);
                 const isCurrentCluster = currentContext === r.context;
                 const visibility =
                   r.trigger === "background"
@@ -307,7 +386,7 @@ export function RecentList({
                       : r.visibility === "private"
                         ? "Private"
                         : "";
-                const identity = `${formatInvestigationTarget(r)} · ${r.context}${isCurrentCluster ? " · Current cluster" : ""} · ${label}${visibility ? ` · ${visibility}` : ""} · Started ${new Date(r.createdAt).toLocaleString()}${initialIssue ? ` · Started with ${initialIssue}` : ""}`;
+                const identity = `${title}${found ? ` · Found: ${found}` : ""}${askedAbout ? ` · Asked: ${askedAbout}` : ""} · ${r.context}${isCurrentCluster ? " · Current cluster" : ""} · ${label}${visibility ? ` · ${visibility}` : ""} · Started ${new Date(r.createdAt).toLocaleString()}${initialIssue ? ` · Started with ${initialIssue}` : ""}`;
                 return (
                   <button
                     key={r.id}
@@ -322,14 +401,14 @@ export function RecentList({
                   >
                     <span className="flex w-full items-start gap-2">
                       <Tooltip
-                        content={r.name}
+                        content={title}
                         position="right"
                         delay={600}
                         className="pointer-events-none"
                         wrapperClassName="min-w-0 flex-1"
                       >
                         <span className="min-w-0 flex-1 line-clamp-2 break-words text-sm font-medium leading-5 text-theme-text-primary">
-                          {r.name}
+                          {questionOnly ? title : r.name}
                         </span>
                       </Tooltip>
                       {(Icon || short) && (
@@ -346,11 +425,13 @@ export function RecentList({
                         </span>
                       )}
                     </span>
-                    <span className="flex w-full items-baseline gap-2 text-xs leading-4 text-theme-text-secondary">
-                      <span className="min-w-0 flex-1 truncate">
-                        {r.namespace ? `${r.namespace} · ` : ""}
-                        {kind}
+                    {found && (
+                      <span className="line-clamp-2 w-full break-words text-xs leading-4 text-theme-text-secondary">
+                        {found}
                       </span>
+                    )}
+                    <span className="flex w-full items-baseline gap-2 text-xs leading-4 text-theme-text-secondary">
+                      <span className="min-w-0 flex-1 truncate">{where}</span>
                       <time
                         dateTime={r.createdAt}
                         className="shrink-0 tabular-nums text-theme-text-tertiary"
@@ -390,6 +471,11 @@ export function RecentList({
                     {collision && qualifier !== parsed.clusterName && (
                       <span className="w-full break-words text-xs leading-4 text-theme-text-secondary">
                         {qualifier}
+                      </span>
+                    )}
+                    {askedAbout && (
+                      <span className="line-clamp-1 w-full text-xs leading-4 text-theme-text-secondary">
+                        Asked: {askedAbout}
                       </span>
                     )}
                     {initialIssue && (

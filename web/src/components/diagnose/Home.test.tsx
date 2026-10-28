@@ -81,7 +81,7 @@ describe("RecentList", () => {
     const html = render([run()]);
     expect(html.match(/<button\b/g)).toHaveLength(1);
     expect(html).not.toContain('title="');
-    expect(html).toContain('aria-label="Deployment.apps shop/checkout');
+    expect(html).toContain('aria-label="Deployment shop/checkout');
     expect(html).toContain('aria-label="Cluster: nonprod"');
   });
   it("uses cluster identity instead of lifecycle locks and deterministic initial-issue text", () => {
@@ -103,7 +103,7 @@ describe("RecentList", () => {
     expect(html).not.toContain("lucide-lock");
     expect(html).not.toContain("lucide-check");
   });
-  it("uses one stable start time per run, sorted into local date groups without previews", () => {
+  it("uses one stable start time per run, sorted into local date groups, with what each found", () => {
     const recentTime = time(2, 13);
     const olderTime = time(1, 12);
     const html = render([
@@ -120,7 +120,8 @@ describe("RecentList", () => {
     expect(html).toContain(`dateTime="${olderTime}"`);
     expect(html).not.toContain(`dateTime="${time(2, 14)}"`);
     expect(html).not.toContain("ago");
-    expect(html).not.toContain("MONGO_PASSWORD");
+    expect(visible(html)).toContain("MONGO_PASSWORD broken");
+    expect(html).not.toContain("**");
     expect(html).toContain(">Today</h3>");
     expect(html).toContain(">Yesterday</h3>");
     expect(visible(html).indexOf("recent")).toBeLessThan(
@@ -171,7 +172,7 @@ describe("RecentList", () => {
     expect(text.indexOf("checkout")).toBeLessThan(
       text.indexOf("shop · Deployment"),
     );
-    expect(html).toContain("Deployment.apps shop/checkout");
+    expect(html).toContain("Deployment shop/checkout");
   });
 
   it("does not change displayed time when cluster-switch bookkeeping updates runs", () => {
@@ -309,5 +310,102 @@ describe("InvestigationHome", () => {
     expect(text).toContain("Pick a problem from Issues");
     expect(text).toContain("Browse issues");
     expect(html).not.toContain("textarea");
+  });
+});
+
+describe("RecentList question runs", () => {
+  it("titles a question-only run by its question and shows where it started", () => {
+    const html = visible(
+      render([
+        run({
+          kind: "",
+          group: "",
+          namespace: "",
+          name: "",
+          question: "checkout returns 502s",
+          namespaces: ["shop"],
+          lookBack: "1h",
+        }),
+      ]),
+    );
+    expect(html).toContain("checkout returns 502s");
+    expect(html).toContain("shop · last 1h");
+  });
+
+  it("keeps a question about a resource under the resource, with what was asked", () => {
+    const html = visible(render([run({ question: "why did it restart?" })]));
+    expect(html).toContain("checkout");
+    expect(html).toContain("Asked: why did it restart?");
+  });
+});
+
+describe("RecentList loading", () => {
+  const renderState = (props: { loaded: boolean; loadFailed?: boolean }) =>
+    visible(
+      renderToStaticMarkup(
+        <RecentList
+          agentLabel="Codex"
+          runs={[]}
+          onSelect={() => {}}
+          onRetry={() => {}}
+          {...props}
+        />,
+      ),
+    );
+
+  it("never claims there are no investigations before the list arrives", () => {
+    expect(renderState({ loaded: false })).not.toContain(
+      "No investigations yet",
+    );
+    expect(
+      renderToStaticMarkup(
+        <RecentList
+          agentLabel="Codex"
+          runs={[]}
+          onSelect={() => {}}
+          loaded={false}
+        />,
+      ),
+    ).toContain('aria-label="Loading investigations"');
+  });
+
+  it("offers a retry when the first load failed", () => {
+    const text = renderState({ loaded: false, loadFailed: true });
+    expect(text).toContain("Couldn’t load investigations");
+    expect(text).toContain("Try again");
+  });
+
+  it("says there are none only after an empty answer", () => {
+    expect(renderState({ loaded: true })).toContain("No investigations yet");
+  });
+});
+
+describe("RecentList findings", () => {
+  it("shows what each run found under its title", () => {
+    const text = visible(
+      render([
+        run({
+          id: "a",
+          preview: "The `api` container exits on a missing **env** var",
+        }),
+      ]),
+    );
+    expect(text).toContain("The api container exits on a missing env var");
+  });
+
+  it("does not attribute a question-only run to an issue", () => {
+    const text = visible(
+      render([
+        run({
+          kind: "",
+          group: "",
+          namespace: "",
+          name: "",
+          question: "checkout is slow",
+          health: { topReason: "CrashLoopBackOff" } as RunSummary["health"],
+        }),
+      ]),
+    );
+    expect(text).not.toContain("Started with");
   });
 });

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { formatInvestigationTarget, runTargetKey } from "./target";
+import {
+  formatInvestigationTarget,
+  formatInvestigationTitle,
+  formatQuestionScope,
+  isQuestionOnly,
+  rerunOpening,
+  runTargetKey,
+} from "./target";
 
 describe("investigation target identity", () => {
   it("uses one running key for singular Kinds and plural resource names", () => {
@@ -34,7 +41,7 @@ describe("investigation target identity", () => {
         namespace: "prod",
         name: "api",
       }),
-    ).toBe("Deployment.apps prod/api");
+    ).toBe("Deployment prod/api");
     expect(
       formatInvestigationTarget({
         kind: "pods",
@@ -54,5 +61,66 @@ describe("investigation target identity", () => {
         name: "api",
       }),
     ).toBe("Service prod/api");
+  });
+});
+
+describe("question runs", () => {
+  const questionOnly = {
+    kind: "",
+    group: "",
+    namespace: "",
+    name: "",
+    question: "checkout is slow\n since lunch",
+    namespaces: ["shop", "payments"],
+    lookBack: "1h",
+  };
+
+  it("names a question-only run by its question on one line", () => {
+    expect(isQuestionOnly(questionOnly)).toBe(true);
+    expect(formatInvestigationTitle(questionOnly)).toBe(
+      "checkout is slow since lunch",
+    );
+    expect(formatQuestionScope(questionOnly)).toBe("shop, payments · last 1h");
+    expect(formatQuestionScope({ ...questionOnly, namespaces: [] })).toBe(
+      "All namespaces · last 1h",
+    );
+  });
+
+  it("names a question about a resource by the resource", () => {
+    const pinned = {
+      ...questionOnly,
+      kind: "Deployment",
+      group: "apps",
+      namespace: "shop",
+      name: "checkout",
+    };
+    expect(isQuestionOnly(pinned)).toBe(false);
+    expect(formatInvestigationTitle(pinned)).toBe("Deployment shop/checkout");
+  });
+});
+
+describe("rerunOpening", () => {
+  it("starts the same question again in a new session", () => {
+    expect(
+      rerunOpening({
+        kind: "",
+        group: "",
+        namespace: "",
+        name: "",
+        question: "checkout is slow",
+        namespaces: ["shop"],
+        lookBack: "6h",
+      }),
+    ).toEqual({
+      kind: "",
+      group: "",
+      namespace: "",
+      name: "",
+      issueId: undefined,
+      fresh: true,
+      question: "checkout is slow",
+      namespaces: ["shop"],
+      lookBack: "6h",
+    });
   });
 });
