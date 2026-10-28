@@ -567,9 +567,12 @@ func TestHandleDiagnoseMetricsGateFailsClosedWithoutDecision(t *testing.T) {
 	getPermCache().Get("undecided", nil).SetCanI("list", "", "configmaps", "alpha", true)
 	// No cached decision for get deployments: the gate must ask an apiserver
 	// the test does not have, so it denies, and Prometheus is never touched.
-	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "alpha", "cart"))
-	if err == nil || result != nil {
-		t.Fatalf("unanswered workload access returned data: result=%v err=%v", result, err)
+	result, metrics := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
+	if len(result["resource"]) == 0 || string(result["resource"]) == "null" {
+		t.Fatal("namespace-visible cached workload context was withheld")
+	}
+	if metrics != nil {
+		t.Fatalf("unanswered workload access returned metrics: %+v", metrics)
 	}
 	if f.probeCalls != 0 || len(f.rangeParams) != 0 {
 		t.Fatalf("Prometheus was contacted (%d probes, %d range queries) before the gate answered", f.probeCalls, len(f.rangeParams))
