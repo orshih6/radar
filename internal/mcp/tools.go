@@ -59,6 +59,8 @@ import (
 // steers. Put conditional advice in response guidance so it arrives when
 // relevant; otherwise describe only fields whose names are insufficient for
 // correct interpretation, not every response field.
+const autoInstrumentationContract = "autoInstrumentation checks per-language refs for NEW Pods, never existing injection. resolved is not admission: a failing language can block all injection. unknown/absence is not no injection. default_ambiguous means multiple Instrumentation CRs (CRD mode)."
+
 func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramRegistry *toolParamRegistry) {
 	boolPtr := func(b bool) *bool { return &b }
 	// Kubernetes API tools have a closed domain; optional container execution
@@ -159,7 +161,7 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 			"carry `application_configuration_change: true`, it is a factual edit " +
 			"classification and narrow ranking hint, not a causal or universal relevance verdict. " +
 			"Failures return {error, error_code, next?, coverage?}; only object_not_found means it is absent. " +
-			"crossplanePause: requested=exact annotation true; acknowledged=that plus stored Synced=False/ReconcilePaused. Independent of readiness; absence allows other pauses.",
+			"crossplanePause: requested=exact annotation true; acknowledged=that plus stored Synced=False/ReconcilePaused. Independent of readiness; absence allows other pauses. " + autoInstrumentationContract,
 		Annotations: readOnly,
 	}, logToolCall("get_resource", handleGetResource))
 
@@ -230,6 +232,7 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 		"or traffic not reaching a service, route or ingress. Pod, Deployment, StatefulSet, DaemonSet and Argo Rollout " +
 		"bundle resource context, selected/capped current and previous logs, Warning events, startup blockers, " +
 		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector/Canary return root reconciliation and owned-workload bundles; Canary also includes its declared target. " +
+		autoInstrumentationContract + " " +
 		"Warning events are a capped sample for the observed resource and Pods; UID-less evidence cannot prove an incarnation. Use get_events for a broader, dedicated event read, including history. " +
 		"`crashCause` is evidence, not a root-cause verdict. `logLineSelection` ranks " +
 		"`" + crashLineFatalPattern + "`, `" + crashLineHeaderOnly + "`, `" +
@@ -1403,6 +1406,10 @@ func buildMCPResourceContextWithOperatorChildren(ctx context.Context, obj runtim
 		opts.Children = children.Context
 		opts.ChildrenUnavailable = children.Unavailable != ""
 	}
+
+	opts.AutoInstrumentation, opts.AutoInstrumentationUnavailable = k8s.AutoInstrumentationForObject(obj, func(group, resource, namespace, verb string) bool {
+		return (namespace == "" || checkNamespaceAccess(ctx, namespace)) && canReadInNamespace(ctx, group, resource, namespace, verb)
+	})
 	opts.Ownership = func(rel *topology.Relationships, fetched ownership.Observation) {
 		k8s.AnswerOwner(rel, fetched, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })
 	}

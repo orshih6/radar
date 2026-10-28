@@ -40,11 +40,19 @@ type Options struct {
 	// ChildrenUnavailable requires nil Children: the whole host observation was
 	// discarded. With both nil/false, this host supplied no child observation.
 	ChildrenUnavailable bool
-	Reflections         ReflectionLookup
-	Tier                ContextTier
 
-	// AccessChecker gates every emitted ContextRef. nil = no gating (treat
-	// as fully authorized — local-kubeconfig / tests).
+	// AutoInstrumentation was computed from access-checked cache reads by the
+	// host. A connection change discards the whole observation.
+	AutoInstrumentation *AutoInstrumentationContext
+	// AutoInstrumentationUnavailable requires nil AutoInstrumentation: the
+	// host discarded the observation. Nil/false means none was supplied.
+	AutoInstrumentationUnavailable bool
+	Reflections                    ReflectionLookup
+	Tier                           ContextTier
+
+	// AccessChecker gates references computed by Build. Hosts authorize their
+	// precomputed blocks, including AutoInstrumentation and any declared but
+	// unresolved coordinates within it. Nil skips Build's access checks.
 	AccessChecker RefAccessChecker
 
 	// Topology supplies relationships when Relationships is nil. Without
@@ -176,7 +184,7 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 		return &ResourceContext{Tier: opts.Tier}
 	}
 
-	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children}
+	rc := &ResourceContext{Tier: opts.Tier, CrossplanePause: CrossplanePauseFor(obj), Children: opts.Children, AutoInstrumentation: opts.AutoInstrumentation}
 	omitted := newOmittedTracker()
 	// Canonical context references still require Get access, even when a
 	// host's relationship view intentionally exposes namespace-readable names.
@@ -193,6 +201,9 @@ func Build(ctx context.Context, obj runtime.Object, opts Options) *ResourceConte
 	}
 	if opts.ChildrenUnavailable {
 		omitted.add("children", OmittedUnavailable)
+	}
+	if opts.AutoInstrumentationUnavailable {
+		omitted.add("autoInstrumentation", OmittedUnavailable)
 	}
 
 	// Topology supplies networking, scaling and spec-declared relations;
