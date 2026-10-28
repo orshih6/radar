@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   actives: ["shop"],
   issues: [] as unknown[],
   pinIssues: [] as unknown[],
+  searchHits: [] as unknown[],
 }));
 
 vi.mock("./DiagnoseContext", () => ({
@@ -29,7 +30,11 @@ vi.mock("../../api/client", () => ({
   }),
   useIssues: () => ({ data: { issues: state.issues } }),
   useResourceIssues: () => ({ data: state.pinIssues }),
-  useSearch: () => ({ data: { hits: [] }, isFetching: false }),
+  useSearch: () => ({
+    data: { hits: state.searchHits },
+    isFetching: false,
+    isPlaceholderData: false,
+  }),
 }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -41,6 +46,7 @@ beforeEach(() => {
   state.questionDraft = null;
   state.issues = [];
   state.pinIssues = [];
+  state.searchHits = [];
   const element = document.createElement("div");
   document.body.appendChild(element);
   root = createRoot(element);
@@ -235,5 +241,48 @@ describe("QuestionComposer", () => {
     state.questionDraft = { seq: 4, consumed: "question A" };
     await render();
     expect(textarea().value).toBe("question B");
+  });
+
+  it("pins the highlighted search result with the keyboard", async () => {
+    state.searchHits = [
+      {
+        score: 2,
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+      },
+      { score: 1, kind: "Service", group: "", namespace: "shop", name: "api" },
+    ];
+    await render();
+    await press("@");
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Search for a resource to pin"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    await act(async () => {
+      setter.call(input, "api");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const key = (k: string) =>
+      act(async () => {
+        input.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: k,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+    await key("ArrowDown");
+    expect(
+      document.querySelector('[role="option"][aria-selected="true"]')
+        ?.textContent,
+    ).toContain("Service");
+    await key("Enter");
+    expect(document.body.textContent).toContain("Service shop/api");
   });
 });

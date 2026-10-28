@@ -1,5 +1,4 @@
-import { issueTitle, type Issue } from "@skyhook-io/k8s-ui";
-import { compareIssues } from "@skyhook-io/k8s-ui/components/issues/types";
+import { compareIssues, issueTitle, type Issue } from "@skyhook-io/k8s-ui";
 
 import { formatInvestigationTarget } from "./target";
 

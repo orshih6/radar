@@ -3,7 +3,7 @@
 // is about. It starts the same investigation, with the same Findings page, as
 // Investigate on a resource; it is not a chat.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowRight, AtSign, Plus, X } from "lucide-react";
+import { ArrowRight, AtSign, X } from "lucide-react";
 import { Collapse } from "@skyhook-io/k8s-ui";
 
 import {
@@ -343,6 +343,7 @@ function ResourcePicker({
   onCancel: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
   const listId = useId();
   const { data, isFetching, isPlaceholderData } = useSearch(query, {
     context: "none",
@@ -353,51 +354,65 @@ function ResourcePicker({
   // be pinnable: Enter would pin what the engineer just typed away from.
   const hits =
     query.trim().length >= 2 && !isPlaceholderData ? (data?.hits ?? []) : [];
+  const activeIndex = Math.min(active, Math.max(hits.length - 1, 0));
+  const pick = (hit: (typeof hits)[number]) =>
+    onPick({
+      kind: hit.kind,
+      group: hit.group ?? "",
+      namespace: hit.namespace ?? "",
+      name: hit.name,
+    });
   return (
     <div className="border-t border-theme-border-subtle px-3 py-2">
       <input
         ref={inputRef}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setActive(0);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
             onCancel();
-          }
-          if (event.key === "Enter") {
+          } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            const first = hits[0];
-            if (first)
-              onPick({
-                kind: first.kind,
-                group: first.group ?? "",
-                namespace: first.namespace ?? "",
-                name: first.name,
-              });
+            if (hits.length === 0) return;
+            const step = event.key === "ArrowDown" ? 1 : -1;
+            setActive((activeIndex + step + hits.length) % hits.length);
+          } else if (event.key === "Enter") {
+            event.preventDefault();
+            const hit = hits[activeIndex];
+            if (hit) pick(hit);
           }
         }}
+        role="combobox"
+        aria-expanded={hits.length > 0}
         aria-label="Search for a resource to pin"
         aria-controls={listId}
+        aria-activedescendant={
+          hits.length > 0 ? `${listId}-${activeIndex}` : undefined
+        }
         placeholder="Search resources by name, kind:Deployment, ns:shop…"
         className="w-full rounded-md border border-theme-border bg-theme-elevated px-2 py-1 text-sm text-theme-text-primary placeholder:text-theme-text-tertiary focus:border-accent focus:outline-none"
       />
-      <ul id={listId} className="mt-1 max-h-48 overflow-y-auto">
-        {hits.map((hit) => (
+      <ul id={listId} role="listbox" className="mt-1 max-h-48 overflow-y-auto">
+        {hits.map((hit, index) => (
           <li
             key={`${hit.group ?? ""}/${hit.kind}/${hit.namespace ?? ""}/${hit.name}`}
+            id={`${listId}-${index}`}
+            role="option"
+            aria-selected={index === activeIndex}
           >
             <button
               type="button"
-              onClick={() =>
-                onPick({
-                  kind: hit.kind,
-                  group: hit.group ?? "",
-                  namespace: hit.namespace ?? "",
-                  name: hit.name,
-                })
-              }
-              className="flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-sm hover:bg-theme-hover"
+              tabIndex={-1}
+              onClick={() => pick(hit)}
+              onMouseEnter={() => setActive(index)}
+              className={`flex w-full items-baseline gap-2 rounded px-2 py-1 text-left text-sm ${
+                index === activeIndex ? "bg-theme-hover" : ""
+              }`}
             >
               <span className="truncate text-theme-text-primary">
                 {hit.name}
@@ -418,8 +433,7 @@ function ResourcePicker({
             </li>
           )}
       </ul>
-      <p className="mt-1 flex items-center gap-1 text-[11px] text-theme-text-tertiary">
-        <Plus className="h-3 w-3" />
+      <p className="mt-1 text-[11px] text-theme-text-tertiary">
         Pinning starts the investigation at that resource, and lets you apply a
         fix from it.
       </p>
