@@ -38,7 +38,8 @@ describe("suggestionsFromIssues", () => {
       namespace: "shop",
       name: "checkout",
     });
-    expect(one?.question).toContain("Deployment shop/checkout");
+    expect(one?.label).toContain("Deployment shop/checkout");
+    expect(one?.question).toBe("What's causing “Crash loop”?");
     const shared = suggestions.find((s) => !s.pin);
     expect(shared?.namespaces).toEqual(["web"]);
     expect(shared?.question).toContain("on 2 resources in web");

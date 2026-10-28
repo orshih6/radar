@@ -11,6 +11,9 @@ export interface QuestionPin {
 
 export interface QuestionSuggestion {
   key: string;
+  /** What the list shows: the question, naming its resource when it pins one. */
+  label: string;
+  /** What goes in the box. A pinned resource is named by its chip instead. */
   question: string;
   namespaces: string[];
   /** Set when the suggestion is about one resource, so the run can start
@@ -62,7 +65,8 @@ export function suggestionsFromIssues(
       };
       suggestions.push({
         key,
-        question: `What's causing “${title}” on ${formatInvestigationTarget(pin)}?`,
+        label: `What's causing “${title}” on ${formatInvestigationTarget(pin)}?`,
+        question: `What's causing “${title}”?`,
         namespaces,
         pin,
       });
@@ -71,11 +75,8 @@ export function suggestionsFromIssues(
     const where = first.namespace
       ? `in ${first.namespace}`
       : "across the cluster";
-    suggestions.push({
-      key,
-      question: `What's causing “${title}” on ${members.length} resources ${where}?`,
-      namespaces,
-    });
+    const question = `What's causing “${title}” on ${members.length} resources ${where}?`;
+    suggestions.push({ key, label: question, question, namespaces });
   }
   return suggestions;
 }
@@ -104,15 +105,11 @@ export function suggestionsForPin(
     const key = `${title}\u0000${on}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    suggestions.push({
-      key,
-      question:
-        on === pinned
-          ? `What's causing “${title}”?`
-          : `What's causing “${title}” on ${on}?`,
-      namespaces: [],
-      pin,
-    });
+    const question =
+      on === pinned
+        ? `What's causing “${title}”?`
+        : `What's causing “${title}” on ${on}?`;
+    suggestions.push({ key, label: question, question, namespaces: [], pin });
   }
   return suggestions;
 }

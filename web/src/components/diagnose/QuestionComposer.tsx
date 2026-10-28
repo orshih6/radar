@@ -80,12 +80,14 @@ export function QuestionComposer({
     pin?.name ?? "",
     !!pin,
   );
+  const asked = text.trim();
   const suggestions = useMemo(
     () =>
-      pin
+      (pin
         ? suggestionsForPin(pinIssues ?? [], pin)
-        : suggestionsFromIssues(issuesData?.issues ?? []),
-    [pin, pinIssues, issuesData],
+        : suggestionsFromIssues(issuesData?.issues ?? [])
+      ).filter((suggestion) => suggestion.question !== asked),
+    [pin, pinIssues, issuesData, asked],
   );
 
   useEffect(() => {
@@ -354,7 +356,7 @@ export function QuestionComposer({
                   onClick={() => applySuggestion(suggestion)}
                   className="w-full rounded-md px-2 py-1.5 text-left text-sm text-theme-text-secondary hover:bg-theme-hover hover:text-theme-text-primary"
                 >
-                  {suggestion.question}
+                  {suggestion.label}
                 </button>
               </li>
             ))}

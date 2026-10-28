@@ -329,4 +329,39 @@ describe("QuestionComposer", () => {
     );
     state.actives = ["shop"];
   });
+
+  it("does not suggest what is already asked", async () => {
+    state.issues = [
+      {
+        id: "i",
+        severity: "critical",
+        source: "problem",
+        category: "crashloop",
+        category_group: "runtime",
+        grouping_scope: "workload",
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+        reason: "CrashLoopBackOff",
+      },
+    ];
+    // The pinned resource reports the same problem it was suggested for.
+    state.pinIssues = state.issues;
+    await render();
+    const suggestion = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.startsWith("What's causing"),
+    )!;
+    expect(suggestion.textContent).toContain("on Deployment shop/api");
+    await act(async () => suggestion.click());
+    expect(textarea().value).toBe(
+      suggestion.textContent?.replace(" on Deployment shop/api", ""),
+    );
+    expect(document.body.textContent).toContain("About");
+    expect(
+      [...document.querySelectorAll("button")].filter((b) =>
+        b.textContent?.startsWith("What's causing"),
+      ),
+    ).toHaveLength(0);
+  });
 });
