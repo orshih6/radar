@@ -33,7 +33,7 @@ export interface StoryExcerptItem {
 export function storyExcerpt(
   observation: InvestigationEvidenceObservation,
   items: readonly StoryExcerptItem[],
-  options: { compact: boolean; scopeNamespace?: string },
+  options: { compact: boolean; preview?: boolean; scopeNamespace?: string },
 ): StoryExcerpt | undefined {
   const data = observation.data;
   // The lines are the card: a compact log card keeps them.
@@ -44,6 +44,11 @@ export function storyExcerpt(
     if (lines.length === 0) return undefined;
     return { kind: "lines", head: lines.slice(-2), rest: lines.slice(0, -2) };
   }
+  // So is the chart: a compact card drops the agent's note, not Radar's
+  // record, and has no body to open. Only the collapsed preview, which
+  // bounds its height, leaves the chart out.
+  if (data.type === "metrics")
+    return options.preview ? undefined : { kind: "chart" };
   if (options.compact) return undefined;
   const named = (row: { kind: string; namespace?: string; name: string }) =>
     items.some(
@@ -55,9 +60,6 @@ export function storyExcerpt(
           item.subject.namespace === row.namespace),
     );
   switch (data.type) {
-    case "metrics":
-      // A placed chart is the card, whatever role the agent gave it.
-      return { kind: "chart" };
     case "inventory": {
       const entries = namedInventoryRows(
         data.resources as InvestigationResourceSummary[],

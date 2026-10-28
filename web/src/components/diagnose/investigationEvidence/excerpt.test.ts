@@ -30,12 +30,17 @@ describe("storyExcerpt", () => {
     });
   });
 
-  it("shows a placed chart whatever its role, and never compact", () => {
+  it("shows a placed chart whatever its role or compact marker, but not in the collapsed preview", () => {
     const metrics = observation({ type: "metrics", origin: "query" } as never);
     expect(storyExcerpt(metrics, [], { compact: false })).toEqual({
       kind: "chart",
     });
-    expect(storyExcerpt(metrics, [], { compact: true })).toBeUndefined();
+    expect(storyExcerpt(metrics, [], { compact: true })).toEqual({
+      kind: "chart",
+    });
+    expect(
+      storyExcerpt(metrics, [], { compact: true, preview: true }),
+    ).toBeUndefined();
   });
 
   it("picks the workload's own rows from a ranking and the findings on it from a posture card", () => {
