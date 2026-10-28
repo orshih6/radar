@@ -254,3 +254,15 @@ func TestDiagnoseStartValidatesTheOpening(t *testing.T) {
 		}
 	}
 }
+
+// The body is bounded before it is read, so an oversized one is refused as
+// too large rather than parsed and blamed on its content.
+func TestDiagnoseStartBoundsTheBody(t *testing.T) {
+	s := diagnoseTestServer(t)
+	rec := httptest.NewRecorder()
+	body := `{"question":"` + strings.Repeat("x", diagnoseStartBodyLimit) + `"}`
+	s.handleDiagnoseStart(rec, httptest.NewRequest(http.MethodPost, "/api/diagnose/runs", strings.NewReader(body)))
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized start = %d %s, want 413", rec.Code, rec.Body.String())
+	}
+}

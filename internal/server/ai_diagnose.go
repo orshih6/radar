@@ -368,6 +368,10 @@ func validReasoningEffort(e string) bool {
 
 // handleDiagnoseStart begins an investigation (or focuses a live one for the same
 // target) and returns its run id. POST {kind, namespace, name}.
+// diagnoseStartBodyLimit bounds a start request well above its largest valid
+// body: a 2000-character question and 20 namespaces.
+const diagnoseStartBodyLimit = 64 << 10
+
 func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	// Use the CLI installed now, not one that moved or went away since the
 	// agent list was last fetched.
@@ -388,7 +392,15 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 		LookBack              string   `json:"lookBack"`
 		AskedAt               string   `json:"askedAt"`
 	}
+	// Unknown fields are ignored rather than refused, so a newer UI can start
+	// a run on an older Radar.
+	r.Body = http.MaxBytesReader(w, r.Body, diagnoseStartBodyLimit)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			s.writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
+			return
+		}
 		s.writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

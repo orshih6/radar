@@ -98,6 +98,21 @@ func TestQuestionTaskPromptWidensTheChangeWindowForALaterRun(t *testing.T) {
 	}
 }
 
+// The opening turn starts moments after the question is asked; that delay
+// must not round the engineer's look-back up to the next hour.
+func TestQuestionTaskPromptIgnoresTheOpeningDelay(t *testing.T) {
+	for lookBack, want := range map[string]string{"15m": "since=15m", "1h": "since=1h", "6h": "since=6h", "24h": "since=24h"} {
+		q := Question{Text: "checkout 502s", LookBack: lookBack, AskedAt: askedAt, OpensAt: askedAt.Add(800 * time.Millisecond)}
+		if p := QuestionTaskPrompt(q, Options{}); !strings.Contains(p, "("+want+")") {
+			t.Errorf("look-back %s: want %s in:\n%s", lookBack, want, p)
+		}
+	}
+	q := Question{Text: "checkout 502s", LookBack: "15m", AskedAt: askedAt, OpensAt: askedAt.Add(4*time.Minute + time.Second)}
+	if p := QuestionTaskPrompt(q, Options{}); !strings.Contains(p, "(since=20m)") {
+		t.Fatalf("a run four minutes later widens by whole minutes:\n%s", p)
+	}
+}
+
 func TestTargetQuestionPromptCarriesTheWindowAndNamespaces(t *testing.T) {
 	target := Target{Kind: "Deployment", Group: "apps", Namespace: "shop", Name: "checkout"}
 	q := Question{Text: "slow since yesterday", Namespaces: []string{"payments"}, LookBack: "24h", AskedAt: askedAt}

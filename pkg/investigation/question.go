@@ -110,8 +110,13 @@ func changesWindow(q Question) string {
 	if q.LookBack == "" || err != nil {
 		return ""
 	}
-	if !q.AskedAt.IsZero() && q.OpensAt.After(q.AskedAt) {
-		lookBack += q.OpensAt.Sub(q.AskedAt)
+	// A turn opens moments after its question is asked; only a gap of a
+	// minute or more (a re-run, a narrowing run) widens the window, rounded
+	// up to the minute so the engineer's own choice reads back unchanged.
+	if !q.AskedAt.IsZero() {
+		if gap := q.OpensAt.Sub(q.AskedAt); gap >= time.Minute {
+			lookBack += (gap + time.Minute - 1).Truncate(time.Minute)
+		}
 	}
 	return " (since=" + sinceDuration(lookBack) + ")"
 }
