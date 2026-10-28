@@ -105,14 +105,14 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       aria-label="Radar on Product Hunt"
       inert={!show || undefined}
       className={clsx(
-        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/70 dark:border-emerald-400/60 bg-theme-surface shadow-[0_10px_40px_-6px_rgba(16,185,129,0.55)] overflow-hidden origin-bottom-right',
+        'launch-border fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-emerald-500/40 dark:border-emerald-400/30 shadow-[0_10px_40px_-6px_rgba(16,185,129,0.6)] dark:shadow-[0_10px_40px_-8px_rgba(16,185,129,0.45)] origin-bottom-right',
         TRANSITION_MENU,
         isOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.97]',
         !show && 'pointer-events-none',
       )}
       style={overlayTransitionStyle(isOpen, 'menu')}
     >
-      <div className="launch-sweep relative flex gap-3 p-4 pr-10 bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
+      <div className="relative flex gap-3 p-4 rounded-[11px] overflow-hidden bg-theme-surface bg-gradient-to-br from-emerald-500/12 via-emerald-500/4 to-transparent dark:from-emerald-400/18 dark:via-emerald-400/6">
         <button
           type="button"
           onClick={dismiss}
@@ -125,7 +125,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
           <Rocket className="w-4 h-4 animate-launch-rocket" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-medium text-theme-text-primary">
+          <p className="flex items-center gap-1.5 pr-6 text-sm font-medium text-theme-text-primary">
             Radar <Heart className="w-3.5 h-3.5 fill-current text-red-500 dark:text-red-400" aria-label="loves" /> Agents
           </p>
           <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300 mt-0.5">
@@ -134,9 +134,9 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
           <p className="text-xs text-theme-text-secondary mt-1.5">
             {shown.phase === 'live'
               ? "We're on Product Hunt today with Radar's newly upgraded MCP server and AI investigations. If Radar has made Kubernetes a little easier for you, a comment on the launch would mean a lot. It helps other engineers find Radar."
-              : "We're launching Radar's newly upgraded MCP server and AI investigations on Product Hunt. We'd love to see you there."}
+              : "We're launching Radar's newly upgraded MCP server and AI investigations on Product Hunt. If Radar has made Kubernetes a little easier for you, follow the launch and come say hi on the day. It helps other engineers find Radar."}
           </p>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3">
+          <div className="flex items-center gap-3 mt-3">
             <a
               href={launchLink(shown.launch)}
               target="_blank"
