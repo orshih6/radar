@@ -223,8 +223,10 @@ export function QuestionComposer({
     });
   };
 
+  // What the engineer already typed is their question; a suggestion then only
+  // says where to start.
   const applySuggestion = (suggestion: QuestionSuggestion) => {
-    setText(suggestion.question);
+    if (!text.trim()) setText(suggestion.question);
     setPin(suggestion.pin ?? null);
     setNamespaces(suggestion.namespaces);
     focusText();
@@ -442,7 +444,7 @@ export function QuestionComposer({
                   <button
                     type="button"
                     onClick={() => applySuggestion(suggestion)}
-                    aria-label={`${ISSUE_SEVERITY_LABEL[suggestion.severity]}: ${suggestion.title}, ${suggestion.where}. Puts “${suggestion.question}” in the box.`}
+                    aria-label={`${ISSUE_SEVERITY_LABEL[suggestion.severity]}: ${suggestion.title}, ${suggestion.where}. ${text.trim() ? "Pins it to your question." : `Puts “${suggestion.question}” in the box.`}`}
                     className="group flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-theme-hover focus-visible:bg-theme-hover focus-visible:outline-none"
                   >
                     <SeverityIcon

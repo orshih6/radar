@@ -455,6 +455,37 @@ describe("QuestionComposer", () => {
     expect(suggestions()).toHaveLength(0);
   });
 
+  it("keeps the engineer's own words when a suggestion is chosen", async () => {
+    state.issues = [
+      {
+        id: "i",
+        severity: "critical",
+        source: "problem",
+        category: "crashloop",
+        category_group: "runtime",
+        grouping_scope: "workload",
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+        reason: "CrashLoopBackOff",
+      },
+    ];
+    await render();
+    await type("api restarts every few minutes since the deploy");
+    const [suggestion] = [...document.querySelectorAll("button")].filter((b) =>
+      b.getAttribute("aria-label")?.startsWith("Critical: Crash loop"),
+    );
+    expect(suggestion.getAttribute("aria-label")).toContain(
+      "Pins it to your question.",
+    );
+    await act(async () => suggestion.click());
+    expect(textarea().value).toBe(
+      "api restarts every few minutes since the deploy",
+    );
+    expect(document.body.textContent).toContain("Deployment shop/api");
+  });
+
   it("says a failed resource search failed instead of finding nothing", async () => {
     state.searchError = true;
     await render();

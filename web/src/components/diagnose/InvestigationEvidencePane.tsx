@@ -69,6 +69,8 @@ export function InvestigationEvidencePane({
   onOpenResource,
   onOpenTimeline,
   withoutTarget = false,
+  assessmentPending = false,
+  showUncited = false,
   afterEvidence,
   recordNotes,
   storyShell = false,
@@ -118,6 +120,10 @@ export function InvestigationEvidencePane({
   /** A question with no resource: every result is "about another resource",
    *  so withheld ones are counted as uncited instead. */
   withoutTarget?: boolean;
+  /** No assessment yet: nothing has been cited, so nothing is "uncited". */
+  assessmentPending?: boolean;
+  /** The run stopped without an assessment; withheld results are shown. */
+  showUncited?: boolean;
 }) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<ReadonlySet<string>>(
     new Set(),
@@ -145,6 +151,7 @@ export function InvestigationEvidencePane({
     rootCauseEvidence,
     investigationCase,
     storyMode,
+    showUncited,
   );
   const hasCurrentEvidence =
     partition.main.length + partition.workload.length > 0;
@@ -470,11 +477,15 @@ export function InvestigationEvidencePane({
   const resultsSummary = [
     partition.hiddenBroader > 0
       ? withoutTarget
-        ? `${partition.hiddenBroader} not cited, not shown`
+        ? assessmentPending
+          ? `${partition.hiddenBroader} not shown yet`
+          : `${partition.hiddenBroader} not cited, not shown`
         : `${partition.hiddenBroader} about other resources not shown`
       : undefined,
     partition.hiddenMetrics > 0
-      ? `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric ${partition.hiddenMetrics === 1 ? "result" : "results"} not shown`
+      ? withoutTarget && assessmentPending
+        ? `${partition.hiddenMetrics} metric ${partition.hiddenMetrics === 1 ? "result" : "results"} not shown yet`
+        : `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric ${partition.hiddenMetrics === 1 ? "result" : "results"} not shown`
       : undefined,
     projection.limitations.length > 0
       ? `${projection.limitations.length} ${projection.limitations.length === 1 ? "check" : "checks"} limited`
@@ -502,13 +513,17 @@ export function InvestigationEvidencePane({
           className="text-xs text-theme-text-tertiary"
           data-testid="investigation-hidden-evidence"
         >
-          {withoutTarget
+          {withoutTarget && assessmentPending
             ? partition.hiddenBroader === 1
-              ? "1 result the assessment didn’t cite is not shown; it appears here when the assessment cites it."
-              : `${partition.hiddenBroader} results the assessment didn’t cite are not shown; they appear here when the assessment cites them.`
-            : partition.hiddenBroader === 1
-              ? "1 result about another resource is not shown; it appears here when the assessment cites it."
-              : `${partition.hiddenBroader} results about other resources are not shown; they appear here when the assessment cites them.`}
+              ? "1 result is held for the assessment; it appears here if the assessment cites it."
+              : `${partition.hiddenBroader} results are held for the assessment; the ones it cites appear here.`
+            : withoutTarget
+              ? partition.hiddenBroader === 1
+                ? "1 result the assessment didn’t cite is not shown; it appears here when the assessment cites it."
+                : `${partition.hiddenBroader} results the assessment didn’t cite are not shown; they appear here when the assessment cites them.`
+              : partition.hiddenBroader === 1
+                ? "1 result about another resource is not shown; it appears here when the assessment cites it."
+                : `${partition.hiddenBroader} results about other resources are not shown; they appear here when the assessment cites them.`}
         </p>
       ) : null}
 
@@ -517,15 +532,20 @@ export function InvestigationEvidencePane({
           className="text-xs text-theme-text-tertiary"
           data-testid="investigation-hidden-metrics"
         >
-          {partition.hiddenMetrics === 1
-            ? `1 ${withoutTarget ? "uncited" : "broader"} metric result is not shown; it appears here when the assessment cites it.`
-            : `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric results are not shown; they appear here when the assessment cites them.`}
+          {withoutTarget && assessmentPending
+            ? partition.hiddenMetrics === 1
+              ? "1 metric result is held for the assessment; it appears here if the assessment cites it."
+              : `${partition.hiddenMetrics} metric results are held for the assessment; the ones it cites appear here.`
+            : partition.hiddenMetrics === 1
+              ? `1 ${withoutTarget ? "uncited" : "broader"} metric result is not shown; it appears here when the assessment cites it.`
+              : `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric results are not shown; they appear here when the assessment cites them.`}
         </p>
       ) : null}
 
       {!hasCurrentEvidence ? (
         <EmptyCollection
           collecting={collecting}
+          withoutTarget={withoutTarget}
           hasEarlierEvidence={partition.earlier.length > 0}
           onViewActivity={onViewActivity}
         />

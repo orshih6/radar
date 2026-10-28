@@ -1190,6 +1190,14 @@ export function InvestigationView({
   // Activity; answers that did not revise the assessment stay there too.
   const paneResolution = rootCauseEvidenceResolution;
   const storyShape = diagnosisHasStoryShape(currentAssessment?.diagnosis);
+  // A run that stopped without an assessment will never cite anything, so
+  // what it collected is all there is to show.
+  const assessmentPending = !currentAssessment?.diagnosis;
+  const showUncited =
+    assessmentPending &&
+    !busy &&
+    run.status !== "running" &&
+    run.status !== "stopping";
   const visibleEvidenceGroupIds = useMemo(
     () =>
       new Set(
@@ -1198,9 +1206,16 @@ export function InvestigationView({
           paneResolution,
           investigationCase,
           storyShape,
+          showUncited,
         ).collectionByGroup.keys(),
       ),
-    [projection.groups, paneResolution, investigationCase, storyShape],
+    [
+      projection.groups,
+      paneResolution,
+      investigationCase,
+      storyShape,
+      showUncited,
+    ],
   );
   const evidenceStepIdsByTurn = useMemo(
     () =>
@@ -2603,6 +2618,8 @@ export function InvestigationView({
                   <InvestigationEvidencePane
                     projection={projection}
                     withoutTarget={questionOnly}
+                    assessmentPending={assessmentPending}
+                    showUncited={showUncited}
                     rootCauseEvidence={paneResolution}
                     investigationCase={investigationCase}
                     story={
