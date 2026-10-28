@@ -11,7 +11,15 @@ export default defineConfig({
     // location would be shared by every worktree.
     fsModuleCachePath: path.resolve(__dirname, '.vitest-cache'),
     projects: [
-      { extends: true, test: { name: 'shared', isolate: false, exclude: [...configDefaults.exclude, ...isolated] } },
+      {
+        extends: true,
+        test: {
+          name: 'shared',
+          isolate: false,
+          setupFiles: [path.resolve(__dirname, '../../scripts/vitest-shared-setup.ts')],
+          exclude: [...configDefaults.exclude, ...isolated],
+        },
+      },
       { extends: true, test: { name: 'isolated', include: isolated } },
     ],
   },

@@ -1,3 +1,4 @@
+import path from 'path'
 import { configDefaults, defineConfig, mergeConfig } from 'vitest/config'
 import { isolatedTestFiles } from '../scripts/vitest-isolated-tests'
 import viteConfig from './vite.config'
@@ -12,7 +13,13 @@ export default mergeConfig(
       projects: [
         {
           extends: true,
-          test: { name: 'shared', isolate: false, include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)'], exclude: [...configDefaults.exclude, ...isolated] },
+          test: {
+            name: 'shared',
+            isolate: false,
+            setupFiles: [path.resolve(__dirname, '../scripts/vitest-shared-setup.ts')],
+            include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+            exclude: [...configDefaults.exclude, ...isolated],
+          },
         },
         { extends: true, test: { name: 'isolated', include: isolated } },
       ],
