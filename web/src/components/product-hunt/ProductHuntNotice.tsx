@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { clsx } from 'clsx'
 import { Heart, Rocket, X } from 'lucide-react'
 import { useCapabilities, useVersionCheck } from '../../api/client'
@@ -6,7 +6,7 @@ import type { UsageDataStatus } from '../../api/usage-data'
 import { USAGE_PROMPT_VISIBILITY_EVENT, updateNoticeVisible, usagePromptOnScreen } from '../usage-data/UsageDataPrompt'
 import { useAnimatedUnmount } from '../../hooks/useAnimatedUnmount'
 import { TRANSITION_MENU, overlayExitMs, overlayTransitionStyle } from '../../utils/animation'
-import { isPhaseDismissed, launchDayLabel, launchPhase, markPhaseDismissed, resolveLaunch, type LaunchPhase, type ProductHuntLaunch } from './launchWindow'
+import { LAUNCH_NOTICE_REOPEN_EVENT, isPhaseDismissed, launchDayLabel, launchPhase, launchShownIn, markPhaseDismissed, resolveLaunch, type LaunchPhase, type ProductHuntLaunch } from './launchWindow'
 
 // The same tag for every install: it says the click came from inside Radar,
 // nothing about who clicked.
@@ -22,10 +22,7 @@ export function shouldShowLaunchNotice(opts: {
   ready: boolean
   cornerBusy: boolean
 }): boolean {
-  // In-cluster Radar is often shared by people who didn't install it, so they
-  // get only the launch-day card.
-  const mode = opts.deploymentMode === 'local' || (opts.deploymentMode === 'in-cluster' && opts.phase === 'live')
-  return opts.phase !== null && mode && !opts.dismissed && opts.ready && !opts.cornerBusy
+  return opts.phase !== null && launchShownIn(opts.deploymentMode, opts.phase) && !opts.dismissed && opts.ready && !opts.cornerBusy
 }
 
 export function launchLink(launch: ProductHuntLaunch): string {
@@ -65,6 +62,16 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
     }
   }, [ended, refetchVersion])
 
+  // Opened again from the sidebar: shows at once, over whatever holds the corner.
+  const [reopened, setReopened] = useState(false)
+  // Re-renders after a dismissal, which lives outside React state.
+  const [, rerender] = useReducer((n: number) => n + 1, 0)
+  useEffect(() => {
+    const onReopen = () => setReopened(true)
+    window.addEventListener(LAUNCH_NOTICE_REOPEN_EVENT, onReopen)
+    return () => window.removeEventListener(LAUNCH_NOTICE_REOPEN_EVENT, onReopen)
+  }, [])
+
   // Tracked whatever the launch, so a launch switched back on sees a usage
   // prompt that opened meanwhile.
   useEffect(() => {
@@ -76,13 +83,13 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
   const show = shouldShowLaunchNotice({
     phase,
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
-    dismissed: phase !== null && isPhaseDismissed(launch, phase),
+    dismissed: phase !== null && isPhaseDismissed(launch, phase) && !reopened,
     // Waits for the version check, which says whether the launch is still on.
-    ready: ready && !versionPending,
+    ready: reopened || (ready && !versionPending),
     // A card already on screen keeps the corner, whatever the day.
-    cornerBusy: usagePromptShowing || (phase === 'upcoming' && (
+    cornerBusy: !reopened && (usagePromptShowing || (phase === 'upcoming' && (
       updateNoticeVisible(versionInfo?.latestVersion, versionInfo?.updateAvailable) || usageDataPending || !!usageData?.firstRunPrompt
-    )),
+    ))),
   })
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
   // What the card last showed, kept through the exit fade: the day can end, or
@@ -95,8 +102,8 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
 
   const dismiss = () => {
     markPhaseDismissed(shown.launch, shown.phase)
-    // Re-render: the dismissal lives outside React state.
-    setNow(Date.now())
+    setReopened(false)
+    rerender()
   }
 
   return (

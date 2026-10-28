@@ -17,6 +17,7 @@ import {
   Megaphone,
   PanelLeftClose,
   PanelLeftOpen,
+  Rocket,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { MainView } from "../../types";
@@ -100,6 +101,8 @@ interface PrimaryNavRailProps {
   accountSlot?: ReactNode;
   // Present only when release notes exist for this version; unread adds a dot.
   whatsNew?: { unread: boolean; onOpen: () => void };
+  // Present during the Product Hunt launch once its card was closed; reopens it.
+  productHunt?: { onOpen: () => void };
 }
 
 export function PrimaryNavRail({
@@ -111,6 +114,7 @@ export function PrimaryNavRail({
   onOpenSettings,
   accountSlot,
   whatsNew,
+  productHunt,
 }: PrimaryNavRailProps) {
   return (
     <aside
@@ -161,6 +165,15 @@ export function PrimaryNavRail({
           accountSlot self-nulls without auth, so no-auth OSS shows only Settings. */}
       <nav className="flex flex-col gap-0.5 px-2 pt-1 border-t border-theme-border/50">
         {accountSlot}
+        {productHunt && (
+          <RailActionRow
+            icon={Rocket}
+            label="Product Hunt"
+            pinned={pinned}
+            onClick={productHunt.onOpen}
+            iconClassName="text-emerald-600 dark:text-emerald-400"
+          />
+        )}
         {whatsNew && (
           <RailActionRow
             icon={Megaphone}
@@ -351,12 +364,14 @@ export function RailActionRow({
   pinned,
   onClick,
   unread = false,
+  iconClassName,
 }: {
   icon: ComponentType<{ className?: string }>;
   label: string;
   pinned: boolean;
   onClick: () => void;
   unread?: boolean;
+  iconClassName?: string;
 }) {
   return (
     <div className={clsx("group/item relative", !pinned && "w-10")}>
@@ -370,8 +385,8 @@ export function RailActionRow({
       >
         <span className="relative flex w-10 shrink-0 items-center justify-center">
           <Icon className={clsx(
-            "w-[18px] h-[18px] group-hover/item:text-theme-text-secondary",
-            unread ? "text-accent" : "text-theme-text-tertiary",
+            "w-[18px] h-[18px]",
+            iconClassName ?? clsx("group-hover/item:text-theme-text-secondary", unread ? "text-accent" : "text-theme-text-tertiary"),
           )} />
           {unread && (
             <span aria-hidden className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-accent ring-2 ring-theme-sidebar" />

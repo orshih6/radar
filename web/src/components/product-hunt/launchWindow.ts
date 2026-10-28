@@ -14,8 +14,16 @@ export const FALLBACK_LAUNCH: ProductHuntLaunch = {
 }
 
 export const LAUNCH_NOTICE_DISMISSED_EVENT = 'radar:product-hunt-notice-dismissed'
+// Sent by the sidebar's Product Hunt item to bring a dismissed card back.
+export const LAUNCH_NOTICE_REOPEN_EVENT = 'radar:product-hunt-notice-reopen'
 
 export type LaunchPhase = 'upcoming' | 'live'
+
+// In-cluster Radar is often shared by people who didn't install it, so they
+// get only the launch day.
+export function launchShownIn(deploymentMode: string | undefined, phase: LaunchPhase): boolean {
+  return deploymentMode === 'local' || (deploymentMode === 'in-cluster' && phase === 'live')
+}
 
 export function resolveLaunch(fromServer: VersionInfo['productHuntLaunch']): ProductHuntLaunch {
   if (!fromServer) return FALLBACK_LAUNCH

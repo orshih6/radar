@@ -103,4 +103,18 @@ describe('ProductHuntNotice', () => {
     act(() => { vi.advanceTimersByTime(10_000) })
     expect(element.textContent).toBe('')
   })
+
+  it('comes back at once when reopened from the sidebar after being closed', () => {
+    render()
+    act(() => { vi.advanceTimersByTime(10_000) })
+    const close = element.querySelector('button[aria-label="Close"]') as HTMLButtonElement
+    act(() => { close.click() })
+    act(() => { vi.advanceTimersByTime(1_000) })
+    expect(element.textContent).toBe('')
+    act(() => { window.dispatchEvent(new Event('radar:product-hunt-notice-reopen')) })
+    expect(element.textContent).toContain('Live on Product Hunt today')
+    act(() => { (element.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click() })
+    act(() => { vi.advanceTimersByTime(1_000) })
+    expect(element.textContent).toBe('')
+  })
 })

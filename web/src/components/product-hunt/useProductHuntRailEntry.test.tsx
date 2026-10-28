@@ -1,0 +1,69 @@
+// @vitest-environment jsdom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const state = vi.hoisted(() => ({ mode: 'local' }))
+vi.mock('../../api/client', () => ({
+  useCapabilities: () => ({ data: { deployment: { mode: state.mode } } }),
+  useVersionCheck: () => ({ data: undefined }),
+}))
+
+import { useProductHuntRailEntry } from './useProductHuntRailEntry'
+import { FALLBACK_LAUNCH, markPhaseDismissed } from './launchWindow'
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+let root: Root
+const seen = vi.fn<(entry: ReturnType<typeof useProductHuntRailEntry>) => void>()
+const entry = () => seen.mock.lastCall?.[0]
+
+function Probe() {
+  seen(useProductHuntRailEntry())
+  return null
+}
+
+function mount() {
+  root = createRoot(document.createElement('div'))
+  act(() => root.render(<Probe />))
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-10-29T17:00:00Z'))
+  localStorage.clear()
+  state.mode = 'local'
+  seen.mockClear()
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  vi.useRealTimers()
+})
+
+describe('useProductHuntRailEntry', () => {
+  it('appears once the card is closed, and reopens it', () => {
+    const launch = { ...FALLBACK_LAUNCH }
+    mount()
+    expect(entry()).toBeUndefined()
+    act(() => markPhaseDismissed(launch, 'live'))
+    expect(entry()).toBeDefined()
+    const reopen = vi.fn()
+    window.addEventListener('radar:product-hunt-notice-reopen', reopen)
+    entry()?.onOpen()
+    expect(reopen).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays away in-cluster before the day and after the window', () => {
+    state.mode = 'in-cluster'
+    vi.setSystemTime(new Date('2026-10-28T17:00:00Z'))
+    markPhaseDismissed(FALLBACK_LAUNCH, 'upcoming')
+    mount()
+    expect(entry()).toBeUndefined()
+    act(() => root.unmount())
+
+    state.mode = 'local'
+    vi.setSystemTime(new Date('2026-10-30T17:00:00Z'))
+    mount()
+    expect(entry()).toBeUndefined()
+  })
+})
