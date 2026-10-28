@@ -7,13 +7,19 @@ import { ArrowRight, AtSign, X } from "lucide-react";
 import { Collapse, useDebouncedValue } from "@skyhook-io/k8s-ui";
 
 import {
+  type SearchResult,
+  useContexts,
   useIssues,
   useNamespaceScope,
   useResourceIssues,
   useSearch,
 } from "../../api/client";
 import { kindToPluralWithGroup } from "../../utils/navigation";
-import { searchCoverageNote } from "../ui/searchCoverageNote";
+import {
+  PENDING_RETRY_BUDGET_MS,
+  PENDING_RETRY_MS,
+  searchCoverageNote,
+} from "../ui/searchCoverageNote";
 import { useDiagnose } from "./DiagnoseContext";
 import {
   suggestionsForPin,
@@ -60,6 +66,14 @@ export function QuestionComposer({
   const textRef = useRef<HTMLTextAreaElement>(null);
   const pickerInputRef = useRef<HTMLInputElement>(null);
 
+  // A pin and chosen namespaces name things in one cluster. After a cluster
+  // switch they would name same-named things somewhere else, so they go; the
+  // words stay.
+  const { data: contexts } = useContexts();
+  const currentContext = contexts?.find((context) => context.isCurrent)?.name;
+  const [chosenIn, setChosenIn] = useState(questionDraft?.context);
+  const [droppedForCluster, setDroppedForCluster] = useState(false);
+
   // Where to start follows the namespace picker until the engineer edits it.
   const { data: scope } = useNamespaceScope();
   const [namespaces, setNamespaces] = useState<string[] | null>(
@@ -95,8 +109,25 @@ export function QuestionComposer({
     if (pickerOpen) pickerInputRef.current?.focus();
   }, [pickerOpen]);
 
-  const unsent = useRef({ text, pin, namespaces, lookBack, inherited });
-  unsent.current = { text, pin, namespaces, lookBack, inherited };
+  useEffect(() => {
+    if (!currentContext) return;
+    if (chosenIn && chosenIn !== currentContext && (pin || namespaces)) {
+      setPin(null);
+      setNamespaces(null);
+      setDroppedForCluster(true);
+    }
+    if (chosenIn !== currentContext) setChosenIn(currentContext);
+  }, [currentContext, chosenIn, pin, namespaces]);
+
+  const unsent = useRef({
+    text,
+    pin,
+    namespaces,
+    lookBack,
+    inherited,
+    chosenIn,
+  });
+  unsent.current = { text, pin, namespaces, lookBack, inherited, chosenIn };
   // A submitted question belongs to its start, not the draft; the start gives
   // it back if it never becomes a run.
   const submitted = useRef(false);
@@ -116,6 +147,7 @@ export function QuestionComposer({
         pin: draft.pin ?? undefined,
         namespaces: draft.namespaces ?? undefined,
         lookBack: draft.lookBack,
+        context: draft.chosenIn,
       });
     },
     [saveQuestionDraft],
@@ -137,6 +169,8 @@ export function QuestionComposer({
     );
     setPin(questionDraft.pin ?? null);
     setNamespaces(questionDraft.namespaces ?? null);
+    setChosenIn(questionDraft.context ?? currentContext);
+    setDroppedForCluster(false);
     setLookBack(questionDraft.lookBack ?? DEFAULT_LOOK_BACK);
     setPickerOpen(!!questionDraft.pickResource);
     if (!questionDraft.pickResource) textRef.current?.focus();
@@ -328,6 +362,12 @@ export function QuestionComposer({
             </button>
           </span>
         </div>
+        {droppedForCluster && !pin && namespaces === null && (
+          <p className="border-t border-theme-border-subtle px-3 py-1.5 text-[11px] text-theme-text-tertiary">
+            The cluster changed, so the pinned resource and chosen namespaces
+            were cleared. Your words are kept.
+          </p>
+        )}
         <Collapse open={pickerOpen && !pin} unmountOnExit>
           <ResourcePicker
             inputRef={pickerInputRef}
@@ -378,6 +418,10 @@ export function QuestionComposer({
   );
 }
 
+function stillSyncing(data: SearchResult | undefined): boolean {
+  return !!data?.coverage?.gaps.some((gap) => gap.code === "kind_sync_pending");
+}
+
 // Kinds that are usually children of what an engineer means: a question is
 // about the Deployment or Service, not one of its ReplicaSets or Pods. They
 // stay pickable, after everything else.
@@ -409,10 +453,30 @@ function ResourcePicker({
   const listId = useId();
   // Search the way the Omnibar does: once typing pauses, not per keystroke.
   const searched = useDebouncedValue(query, 150, (value) => !value.trim());
+  // Kinds still syncing answer "not yet", not "no": keep asking, as the
+  // Omnibar does, for a bounded while.
+  const [exhausted, setExhausted] = useState<string | null>(null);
   const { data, isFetching, isPlaceholderData, isError, refetch } = useSearch(
     searched,
-    { context: "none", limit: 8, globalNs: true },
+    {
+      context: "none",
+      limit: 8,
+      globalNs: true,
+      refetchInterval: (latest) =>
+        stillSyncing(latest) && exhausted !== searched
+          ? PENDING_RETRY_MS
+          : false,
+    },
   );
+  const syncing = !isPlaceholderData && stillSyncing(data);
+  useEffect(() => {
+    if (!syncing) return;
+    const timer = setTimeout(
+      () => setExhausted(searched),
+      PENDING_RETRY_BUDGET_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [syncing, searched]);
   // Results belong to what is in the box only once it has been searched.
   const current =
     searched === query && query.trim().length >= 2 && !isPlaceholderData;
@@ -423,7 +487,11 @@ function ResourcePicker({
     [current, isError, data],
   );
   const note = current
-    ? searchCoverageNote(data?.coverage, { hits: data?.hits, query })
+    ? searchCoverageNote(data?.coverage, {
+        hits: data?.hits,
+        query,
+        pendingExhausted: exhausted === searched,
+      })
     : undefined;
   const noteText = note?.parts
     ? note.parts.map((part) => part.text).join(" ")
@@ -520,6 +588,18 @@ function ResourcePicker({
         {current && !isError && noteText && (
           <li className="px-2 py-1 text-[11px] text-theme-text-tertiary">
             {noteText}
+            {syncing && exhausted === searched && (
+              <button
+                type="button"
+                onClick={() => {
+                  setExhausted(null);
+                  void refetch();
+                }}
+                className="ml-1 font-medium text-theme-text-primary hover:underline"
+              >
+                Try again
+              </button>
+            )}
           </li>
         )}
       </ul>

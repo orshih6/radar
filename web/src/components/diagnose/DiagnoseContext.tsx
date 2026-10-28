@@ -85,6 +85,8 @@ export interface QuestionDraft {
   pickResource?: boolean;
   /** When the handed-over question was first asked; kept while its words are. */
   askedAt?: string;
+  /** The cluster the pin and namespaces were chosen in. */
+  context?: string;
 }
 
 // Setup readiness of local AI investigations, derived from the agents API:
@@ -187,6 +189,10 @@ interface DiagnoseLayoutCtx {
   panelBounds: { min: number; max: number };
   panelWidthKey: string;
   runningKeys: ReadonlySet<string>; // resources with a live investigation (see runTargetKey)
+  // The live run behind each running key, so "view it" opens that run rather
+  // than starting another: a question someone asked about the resource
+  // doesn't stand in for a fresh resource start.
+  runningRunIds: ReadonlyMap<string, string>;
   runningCount: number;
 }
 
@@ -814,16 +820,31 @@ function RoutedDiagnoseProvider({
   // A content-stable signature of the resources with a live investigation,
   // so per-resource Investigate buttons only re-render when their live targets
   // change.
+  // A plain resource run sorts after a question about the same resource, so
+  // it is the one a key maps to when both are live.
   const runningSig = runningRuns
     .filter((r) => !isQuestionOnly(r))
-    .map((r) => runTargetKey(r.kind, r.namespace, r.name, r.group))
+    .map(
+      (r) =>
+        `${runTargetKey(r.kind, r.namespace, r.name, r.group)}\t${r.question ? 0 : 1}\t${r.id}`,
+    )
     .sort()
-    // resourceKey itself is pipe-delimited; newlines cannot occur in a
-    // Kubernetes group, Kind, namespace, or name.
+    // resourceKey itself is pipe-delimited; newlines and tabs cannot occur in
+    // a Kubernetes group, Kind, namespace, or name.
     .join("\n");
-  const runningKeys = useMemo(
-    () => new Set(runningSig ? runningSig.split("\n") : []),
+  const runningRunIds = useMemo(
+    () =>
+      new Map(
+        (runningSig ? runningSig.split("\n") : []).map((line) => {
+          const [key, , id] = line.split("\t");
+          return [key, id] as const;
+        }),
+      ),
     [runningSig],
+  );
+  const runningKeys = useMemo(
+    () => new Set(runningRunIds.keys()),
+    [runningRunIds],
   );
   const runningCount = runningRuns.length;
   const hasRunning = runningCount > 0;
@@ -1285,6 +1306,7 @@ function RoutedDiagnoseProvider({
       panelBounds: PANEL_BOUNDS,
       panelWidthKey: WIDTH_KEY,
       runningKeys,
+      runningRunIds,
       runningCount,
     }),
     [
@@ -1297,6 +1319,7 @@ function RoutedDiagnoseProvider({
       width,
       narrow,
       runningKeys,
+      runningRunIds,
       runningCount,
       setMaximized,
       setWidth,

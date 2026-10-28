@@ -4,12 +4,18 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DiagnoseError } from "../../api/diagnose";
-import { DiagnoseProvider, useDiagnose } from "./DiagnoseContext";
+import {
+  DiagnoseProvider,
+  useDiagnose,
+  useDiagnoseLayout,
+} from "./DiagnoseContext";
+import { runTargetKey } from "./target";
 
 const api = vi.hoisted(() => ({
   createRun: vi.fn(),
   recordConsent: vi.fn(),
   consented: {} as Record<string, boolean>,
+  runs: [] as unknown[],
 }));
 
 vi.mock("../../api/diagnose", async (importOriginal) => ({
@@ -32,7 +38,7 @@ vi.mock("../../api/diagnose", async (importOriginal) => ({
       },
     ],
   }),
-  listRuns: async () => ({ runs: [] }),
+  listRuns: async () => ({ runs: api.runs }),
   getRun: vi.fn(),
   createRun: api.createRun,
   recordConsent: api.recordConsent,
@@ -41,9 +47,11 @@ vi.mock("../../api/diagnose", async (importOriginal) => ({
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root;
 let diagnose: ReturnType<typeof useDiagnose>;
+let layout: ReturnType<typeof useDiagnoseLayout>;
 
 function Probe() {
   diagnose = useDiagnose();
+  layout = useDiagnoseLayout();
   return null;
 }
 
@@ -67,6 +75,7 @@ beforeEach(async () => {
   api.createRun.mockReset();
   api.recordConsent.mockReset();
   api.consented = {};
+  api.runs = [];
   localStorage.clear();
   const element = document.createElement("div");
   document.body.appendChild(element);
@@ -139,5 +148,29 @@ describe("starting from a question", () => {
     );
     await flush();
     expect(diagnose.questionDraft?.namespaces).toEqual([]);
+  });
+
+  it("points a resource's running indicator at the live run, a question run included", async () => {
+    const run = (id: string, question?: string) => ({
+      id,
+      kind: "Deployment",
+      group: "apps",
+      namespace: "shop",
+      name: "api",
+      context: "ctx",
+      status: "running",
+      question,
+      createdAt: "2026-10-28T09:00:00Z",
+      updatedAt: "2026-10-28T09:00:00Z",
+    });
+    const key = runTargetKey("Deployment", "shop", "api", "apps");
+    api.runs = [run("asked", "why?")];
+    await act(async () => diagnose.refreshRuns());
+    await flush();
+    expect(layout.runningRunIds.get(key)).toBe("asked");
+    api.runs = [run("asked", "why?"), run("plain")];
+    await act(async () => diagnose.refreshRuns());
+    await flush();
+    expect(layout.runningRunIds.get(key)).toBe("plain");
   });
 });

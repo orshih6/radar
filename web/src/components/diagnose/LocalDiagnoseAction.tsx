@@ -34,15 +34,17 @@ function DiagnoseResourceButton({
   health?: "problem" | "healthy" | "unknown";
 }) {
   const d = useDiagnose();
-  const { runningKeys } = useDiagnoseLayout();
+  const { runningRunIds } = useDiagnoseLayout();
   // Hidden only when the feature can't work here (auth/cloud/--no-mcp). When it's
   // supported but no agent is installed we KEEP the button — clicking opens the
   // setup notice so the feature is discoverable rather than silently absent.
   if (d.setupState === "off" || d.setupState === "unknown") return null;
   const ready = d.available;
   const problem = health === "problem";
-  const running =
-    ready && runningKeys.has(runTargetKey(kind, namespace, name, group ?? ""));
+  const runningRunId = ready
+    ? runningRunIds.get(runTargetKey(kind, namespace, name, group ?? ""))
+    : undefined;
+  const running = !!runningRunId;
   const tooltip = !ready
     ? notReadyTooltip(d)
     : running
@@ -66,6 +68,7 @@ function DiagnoseResourceButton({
         onClick={() => {
           const target = { kind, group: group ?? "", namespace, name };
           if (!ready) d.openHome();
+          else if (runningRunId) d.openRun(runningRunId);
           // Asking about a resource with no live problem means saying what
           // to ask; a problem, or a run already live, opens straight away.
           else if (asks)

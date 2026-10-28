@@ -15,6 +15,8 @@ const state = vi.hoisted(() => ({
   pinIssues: [] as unknown[],
   searchHits: [] as unknown[],
   searchError: false,
+  searchCoverage: undefined as unknown,
+  context: "cluster-a",
 }));
 
 vi.mock("@skyhook-io/k8s-ui", async (importOriginal) => ({
@@ -35,8 +37,13 @@ vi.mock("../../api/client", () => ({
   }),
   useIssues: () => ({ data: { issues: state.issues } }),
   useResourceIssues: () => ({ data: state.pinIssues }),
+  useContexts: () => ({
+    data: [{ name: state.context, isCurrent: true }],
+  }),
   useSearch: () => ({
-    data: state.searchError ? undefined : { hits: state.searchHits },
+    data: state.searchError
+      ? undefined
+      : { hits: state.searchHits, coverage: state.searchCoverage },
     isFetching: false,
     isPlaceholderData: false,
     isError: state.searchError,
@@ -55,6 +62,8 @@ beforeEach(() => {
   state.pinIssues = [];
   state.searchHits = [];
   state.searchError = false;
+  state.searchCoverage = undefined;
+  state.context = "cluster-a";
   state.actives = ["shop"];
   const element = document.createElement("div");
   document.body.appendChild(element);
@@ -390,5 +399,51 @@ describe("QuestionComposer", () => {
     });
     expect(document.body.textContent).toContain("Couldn’t search resources.");
     expect(document.body.textContent).not.toContain("No matching resources.");
+  });
+
+  it("clears a pin chosen in another cluster but keeps the words", async () => {
+    state.questionDraft = {
+      seq: 1,
+      text: "why is it slow?",
+      pin: {
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+      },
+      context: "cluster-a",
+    };
+    await render();
+    expect(document.body.textContent).toContain("Deployment shop/api");
+    state.context = "cluster-b";
+    await render();
+    expect(document.body.textContent).not.toContain("Deployment shop/api");
+    expect(document.body.textContent).toContain("The cluster changed");
+    expect(textarea().value).toBe("why is it slow?");
+  });
+
+  it("says a search is still loading while kinds sync", async () => {
+    state.searchCoverage = {
+      status: "partial",
+      scope: { namespaces: { count: 0 } },
+      read: { namespaces: { count: 0 } },
+      gaps: [
+        { code: "kind_sync_pending", kind: "Widget", group: "example.com" },
+      ],
+    };
+    await render();
+    await press("@");
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Search for a resource to pin"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    await act(async () => {
+      setter.call(input, "widget");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("Still loading");
   });
 });
