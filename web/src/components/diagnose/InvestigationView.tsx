@@ -2568,7 +2568,11 @@ export function InvestigationView({
                         : undefined
                     }
                     storyShell={storyShell}
-                    summarizedLimits={storyShape ? assessmentLimits : undefined}
+                    summarizedLimits={
+                      storyShape
+                        ? [...assessmentLimits, ...assessmentRoutineLimits]
+                        : undefined
+                    }
                     collecting={
                       explanationRequest?.status !== "running" &&
                       (requestPending ||
