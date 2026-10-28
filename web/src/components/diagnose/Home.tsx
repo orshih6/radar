@@ -22,16 +22,34 @@ import {
 import { Tooltip } from "../ui/Tooltip";
 import { QuestionComposer } from "./QuestionComposer";
 
+function daysBefore(date: Date, now: Date): number {
+  const start = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  return Math.round((start(now) - start(date)) / 86_400_000);
+}
+
+// A header per day gave sparse history one header per row; four buckets keep
+// the list scannable, and rows older than yesterday carry their own date.
 function historyDay(date: Date, now: Date): string {
-  if (date.toDateString() === now.toDateString()) return "Today";
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return date.toLocaleDateString(undefined, {
+  const days = daysBefore(date, now);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return "This week";
+  return "Earlier";
+}
+
+function historyTime(date: Date, now: Date): string {
+  const time = date.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (daysBefore(date, now) <= 1) return time;
+  const day = date.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   });
+  return `${day} · ${time}`;
 }
 
 // Relative age makes the list easy to scan; a stable local timestamp makes two
@@ -406,10 +424,11 @@ export function RecentList({
                 const askedAbout = questionOnly ? "" : (r.question ?? "");
                 // The engineer's question frames a run better than the issue
                 // Radar flagged when it started, so a run shows one or the other.
-                const initialIssue = r.question
-                  ? undefined
-                  : r.health?.topReason?.trim();
                 const found = previewText(r.preview);
+                // What it found says more than what it started from, so the
+                // starting issue shows only until there is a finding.
+                const initialIssue =
+                  r.question || found ? undefined : r.health?.topReason?.trim();
                 const isCurrentCluster = currentContext === r.context;
                 const visibility =
                   r.trigger === "background"
@@ -463,16 +482,13 @@ export function RecentList({
                         {found}
                       </span>
                     )}
-                    <span className="flex w-full items-baseline gap-2 text-xs leading-4 text-theme-text-secondary">
+                    <span className="flex w-full items-baseline gap-2 text-xs leading-4 text-theme-text-tertiary">
                       <span className="min-w-0 flex-1 truncate">{where}</span>
                       <time
                         dateTime={r.createdAt}
                         className="shrink-0 tabular-nums text-theme-text-tertiary"
                       >
-                        {new Date(r.createdAt).toLocaleTimeString(undefined, {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
+                        {historyTime(new Date(r.createdAt), now)}
                       </time>
                     </span>
                     <Tooltip
@@ -488,9 +504,12 @@ export function RecentList({
                             ? `Current cluster: ${parsed.clusterName}`
                             : `Cluster: ${parsed.clusterName}`
                         }
-                        className={`flex w-full items-center gap-1 text-xs leading-4 ${isCurrentCluster ? "text-accent-text" : "text-theme-text-tertiary"}`}
+                        className="flex w-full items-center gap-1 text-xs leading-4 text-theme-text-tertiary"
                       >
-                        <Server className="h-3 w-3 shrink-0" aria-hidden />
+                        <Server
+                          className={`h-3 w-3 shrink-0 ${isCurrentCluster ? "text-accent" : ""}`}
+                          aria-hidden
+                        />
                         <span className="min-w-0 flex-1 truncate">
                           {parsed.clusterName}
                         </span>
@@ -502,17 +521,17 @@ export function RecentList({
                       </span>
                     </Tooltip>
                     {collision && qualifier !== parsed.clusterName && (
-                      <span className="w-full break-words text-xs leading-4 text-theme-text-secondary">
+                      <span className="w-full break-words text-xs leading-4 text-theme-text-tertiary">
                         {qualifier}
                       </span>
                     )}
                     {askedAbout && (
-                      <span className="line-clamp-1 w-full text-xs leading-4 text-theme-text-secondary">
+                      <span className="line-clamp-1 w-full text-xs leading-4 text-theme-text-tertiary">
                         Asked: {askedAbout}
                       </span>
                     )}
                     {initialIssue && (
-                      <span className="line-clamp-1 w-full text-xs leading-4 text-theme-text-secondary">
+                      <span className="line-clamp-1 w-full text-xs leading-4 text-theme-text-tertiary">
                         Started with {initialIssue}
                       </span>
                     )}

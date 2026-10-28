@@ -103,6 +103,44 @@ describe("RecentList", () => {
     expect(html).not.toContain("lucide-lock");
     expect(html).not.toContain("lucide-check");
   });
+  it("groups older history into this week and earlier, dating each older row", () => {
+    const html = render([
+      run({ id: "today", name: "today", createdAt: time(2, 9) }),
+      run({ id: "week", name: "week", createdAt: time(1 - 3, 9) }),
+      run({
+        id: "old",
+        name: "old",
+        createdAt: new Date(2026, 6, 4, 18, 5).toISOString(),
+      }),
+    ]);
+    const text = visible(html);
+    expect(
+      html.match(/<h3 [^>]*>(Today|Yesterday|This week|Earlier)<\/h3>/g),
+    ).toHaveLength(3);
+    expect(html).toContain(">This week</h3>");
+    expect(html).toContain(">Earlier</h3>");
+    const day = (d: Date) =>
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    expect(text).toContain(`${day(new Date(2026, 6, 4))} · `);
+    expect(text).not.toContain(`${day(NOW)} · `);
+  });
+  it("shows the issue a run started with only until it has a finding", () => {
+    const html = render([
+      run({
+        id: "a",
+        name: "found",
+        health: { topReason: "ErrImagePull" },
+        preview: "A direct edit set a bad tag.",
+      }),
+      run({
+        id: "b",
+        name: "pending",
+        health: { topReason: "CrashLoopBackOff" },
+      }),
+    ]);
+    expect(html).not.toContain("Started with ErrImagePull");
+    expect(html).toContain("Started with CrashLoopBackOff");
+  });
   it("uses one stable start time per run, sorted into local date groups, with what each found", () => {
     const recentTime = time(2, 13);
     const olderTime = time(1, 12);
