@@ -105,14 +105,14 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
       aria-label="Radar on Product Hunt"
       inert={!show || undefined}
       className={clsx(
-        'fixed bottom-4 right-4 z-40 w-[21rem] max-w-[calc(100vw-2rem)] rounded-xl border border-theme-border bg-theme-surface shadow-theme-lg overflow-hidden origin-bottom-right',
+        'fixed bottom-4 right-4 z-40 w-[24rem] max-w-[calc(100vw-2rem)] rounded-xl border border-theme-border bg-theme-surface shadow-theme-lg overflow-hidden origin-bottom-right',
         TRANSITION_MENU,
         isOpen ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-1 scale-[0.97]',
         !show && 'pointer-events-none',
       )}
       style={overlayTransitionStyle(isOpen, 'menu')}
     >
-      <div className="relative flex gap-3 p-3.5 pr-9">
+      <div className="relative flex gap-3 p-4 pr-10">
         <button
           type="button"
           onClick={dismiss}
