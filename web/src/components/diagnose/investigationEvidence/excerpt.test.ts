@@ -30,17 +30,12 @@ describe("storyExcerpt", () => {
     });
   });
 
-  it("shows a chart only when the card is the cause or the symptom, and never compact", () => {
+  it("shows a placed chart whatever its role, and never compact", () => {
     const metrics = observation({ type: "metrics", origin: "query" } as never);
-    expect(
-      storyExcerpt(metrics, [{ role: "context" }], { compact: false }),
-    ).toBeUndefined();
-    expect(
-      storyExcerpt(metrics, [{ role: "symptom" }], { compact: false }),
-    ).toEqual({ kind: "chart" });
-    expect(
-      storyExcerpt(metrics, [{ role: "cause" }], { compact: true }),
-    ).toBeUndefined();
+    expect(storyExcerpt(metrics, [], { compact: false })).toEqual({
+      kind: "chart",
+    });
+    expect(storyExcerpt(metrics, [], { compact: true })).toBeUndefined();
   });
 
   it("picks the workload's own rows from a ranking and the findings on it from a posture card", () => {
