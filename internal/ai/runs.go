@@ -1492,7 +1492,8 @@ func derefTime(t *time.Time) time.Time {
 // key so starting safeguarded Codex never silently focuses a full-local run
 // run for the same resource. Immutable fields, so no lock needed.
 func (r *Run) matchesTarget(kind, group, namespace, name, ctx, agent string, profile ExecutionProfile, model, effort string) bool {
-	return r.Kind == kind && r.Group == group && r.Namespace == namespace && r.Name == name &&
+	return r.Question == "" &&
+		r.Kind == kind && r.Group == group && r.Namespace == namespace && r.Name == name &&
 		r.Context == ctx && r.Agent == agent && r.Profile == profile &&
 		r.Model == model && r.Effort == effort
 }

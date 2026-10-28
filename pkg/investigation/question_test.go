@@ -97,3 +97,14 @@ func TestQuestionTaskPromptWidensTheChangeWindowForALaterRun(t *testing.T) {
 		t.Fatalf("a fresh question keeps its look-back:\n%s", p)
 	}
 }
+
+func TestTargetQuestionPromptCarriesTheWindowAndNamespaces(t *testing.T) {
+	target := Target{Kind: "Deployment", Group: "apps", Namespace: "shop", Name: "checkout"}
+	q := Question{Text: "slow since yesterday", Namespaces: []string{"payments"}, LookBack: "24h", AskedAt: askedAt}
+	p := TargetQuestionPrompt(target, nil, q, Options{})
+	for _, want := range []string{"`get_changes` (since=24h)", "They also want it checked in namespace payments."} {
+		if !strings.Contains(p, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, p)
+		}
+	}
+}

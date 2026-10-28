@@ -104,3 +104,22 @@ func TestQuestionSurvivesRestart(t *testing.T) {
 		t.Fatalf("reloaded summary lost the opening question: %+v", got)
 	}
 }
+
+// A plain resource start must not be focused onto a question someone asked
+// about the same resource: it would get their question-led answer instead
+// of a health assessment.
+func TestResourceStartIsNotFocusedOntoAQuestionRun(t *testing.T) {
+	m, live, _ := controlledRunManager(t, nil)
+	live.status = "running"
+	live.Question = "why did it restart?"
+	got, err := m.Start(StartSpec{
+		Kind: live.Kind, Namespace: live.Namespace, Name: live.Name,
+		Agent: live.Agent, Profile: live.Profile,
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if got.ID == live.ID {
+		t.Fatal("a resource-only start focused onto a live question run")
+	}
+}

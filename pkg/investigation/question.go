@@ -63,9 +63,27 @@ func TargetQuestionPrompt(target Target, health *HealthSignal, q Question, opts 
 	}
 	prompt := questionOpening(q) +
 		" They asked about " + target.Label() + "; start there, and follow the evidence to adjacent objects when it points elsewhere." +
+		alsoLookIn(q) + targetChanges(q) +
 		" What Radar currently records for it, as context only: " + healthFrame(target.Label(), health) +
 		toolGuidance + " " + answerFormatInstruction + verdictContract(opts.Citations) + storyGuidance
 	return withMetrics(prompt, opts.Metrics)
+}
+
+func alsoLookIn(q Question) string {
+	if len(q.Namespaces) == 0 {
+		return ""
+	}
+	return " They also want it checked " + whereToStart(q) + "."
+}
+
+// targetChanges asks for the resource's changes over the engineer's window;
+// a bare get_changes covers only the last hour.
+func targetChanges(q Question) string {
+	window := changesWindow(q)
+	if window == "" {
+		return ""
+	}
+	return " Read what changed around it with `get_changes`" + window + "."
 }
 
 func questionOpening(q Question) string {
