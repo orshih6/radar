@@ -43,6 +43,7 @@ import { toggleSet } from './GitOpsGraphFilterRail'
 import { useFilterState, defineFilterSchema } from '../../filter-state'
 import { parseContextName } from '../../utils/context-name'
 import { formatCompactAge, formatRelativeAgeTime } from '../../utils/format'
+import { FilterRailPanel } from '../shared/FilterRailPanel'
 
 // =============================================================================
 // GitOpsTableView — the canonical GitOps fleet list (Argo + Flux).
@@ -947,13 +948,17 @@ function GitOpsFilterSidebar({
         side === 'right' ? 'border-l max-[899px]:border-l-0' : 'border-r max-[899px]:border-r-0'
       }`}
     >
-      <div className="flex items-center justify-between border-b border-theme-border px-3 py-2">
-        <span className="text-sm font-medium text-theme-text-secondary">Filters</span>
-        <button type="button" onClick={onClear} className="text-[10px] font-medium text-blue-500 hover:text-blue-400">
-          Clear
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto">
+      <FilterRailPanel
+        activeCount={
+          syncFilters.size + healthFilters.size + automationFilters.size + kindFilters.size +
+          projectFilters.size + namespaceFilters.size + (lifecycleFilter === 'all' ? 0 : 1)
+        }
+        clear={
+          <button type="button" onClick={onClear} className="text-[10px] font-medium text-blue-500 hover:text-blue-400">
+            Clear
+          </button>
+        }
+      >
         {loading ? (
           <BoardRailSkeleton
             sections={[
@@ -1072,7 +1077,7 @@ function GitOpsFilterSidebar({
         </GitOpsFilterSection>
           </>
         )}
-      </div>
+      </FilterRailPanel>
     </aside>
   )
 }
