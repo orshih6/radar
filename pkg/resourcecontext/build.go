@@ -50,8 +50,9 @@ type Options struct {
 	Reflections                    ReflectionLookup
 	Tier                           ContextTier
 
-	// AccessChecker gates references computed by Build. Hosts authorize their
-	// precomputed blocks, including AutoInstrumentation and any declared but
+	// AccessChecker gates Build-projected references, including Children when
+	// supplied. Hosts authorize other precomputed blocks, including
+	// AutoInstrumentation and any declared but
 	// unresolved coordinates within it. Nil skips Build's access checks.
 	AccessChecker RefAccessChecker
 
