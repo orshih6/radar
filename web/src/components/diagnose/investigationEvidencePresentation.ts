@@ -120,19 +120,20 @@ function routineLimitation(entry: InvestigationEvidenceLimitation): boolean {
  * `open` holds reads Radar could not complete, which qualify the answer and
  * sit under Still open; `routine` holds sampling caps and history bounds,
  * which hold on most runs and are shown folded beneath it. A source with
- * both contributes a line to each.
+ * anything else keeps its whole line open, so the line matches the one
+ * Captured results groups and is not repeated there.
  */
 export function assessmentLimitLines(
   limitations: InvestigationEvidenceLimitation[],
 ): { open: string[]; routine: string[] } {
-  const lines = (entries: InvestigationEvidenceLimitation[]) =>
-    groupEvidenceCoverage(entries).map(
-      (group) => `${group.label}: ${group.summary}`,
-    );
-  return {
-    open: lines(limitations.filter((entry) => !routineLimitation(entry))),
-    routine: lines(limitations.filter(routineLimitation)),
-  };
+  const open: string[] = [];
+  const routine: string[] = [];
+  for (const group of groupEvidenceCoverage(limitations)) {
+    const line = `${group.label}: ${group.summary}`;
+    if (group.limitations.every(routineLimitation)) routine.push(line);
+    else open.push(line);
+  }
+  return { open, routine };
 }
 
 /** Group the presentation, not the underlying limitations or health qualification. */

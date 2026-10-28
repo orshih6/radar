@@ -451,21 +451,14 @@ describe("coverage presentation", () => {
     expect(groups[0].summary).toContain("Connection timed out");
     expect(groups[0].limitations).toHaveLength(3);
   });
-  it("splits assessment limits into open reads and routine bookkeeping per entry", () => {
-    const { open, routine } = assessmentLimitLines([
+  it("folds a source into the routine line only when every limit on it is routine", () => {
+    const watched =
+      "Radar has watched MutatingWebhookConfigurations only since 2026-10-27T23:42:37Z; earlier changes in the window are unknown.";
+    const failed =
+      "Radar failed to record a MutatingWebhookConfiguration change at 2026-10-28T00:00:00Z; changes in the window may be missing.";
+    const routineOnly = assessmentLimitLines([
       limitation("Container logs", "Logs sampled", "truncated"),
-      limitation("Container logs", "Forbidden: cannot read pod logs", "error"),
-      limitation(
-        "Cluster-scoped admission changes",
-        "Radar has watched MutatingWebhookConfigurations only since 2026-10-27T23:42:37Z; earlier changes in the window are unknown.",
-        "unknown",
-        true,
-      ),
-      limitation(
-        "Cluster-scoped admission changes",
-        "Radar failed to record a MutatingWebhookConfiguration change at 2026-10-28T00:00:00Z; changes in the window may be missing.",
-        "unknown",
-      ),
+      limitation("Cluster-scoped admission changes", watched, "unknown", true),
       limitation(
         "Recent changes",
         "Secret object history incomplete",
@@ -473,15 +466,25 @@ describe("coverage presentation", () => {
         true,
       ),
     ]);
-    expect(open).toEqual([
-      "Container logs: Forbidden: cannot read pod logs",
-      "Cluster-scoped admission changes: Radar failed to record a MutatingWebhookConfiguration change at 2026-10-28T00:00:00Z; changes in the window may be missing.",
-    ]);
-    expect(routine).toEqual([
+    expect(routineOnly.open).toEqual([]);
+    expect(routineOnly.routine).toEqual([
       "Container logs: Only part of the logs was checked.",
-      "Cluster-scoped admission changes: Radar has watched MutatingWebhookConfigurations only since 2026-10-27T23:42:37Z; earlier changes in the window are unknown.",
+      `Cluster-scoped admission changes: ${watched}`,
       "Recent changes: Change history is incomplete.",
     ]);
+    // A failed read keeps its source open, whole, so the line is the one
+    // Captured results shows and its dedupe still matches.
+    const mixed = assessmentLimitLines([
+      limitation("Container logs", "Logs sampled", "truncated"),
+      limitation("Container logs", "Forbidden: cannot read pod logs", "error"),
+      limitation("Cluster-scoped admission changes", watched, "unknown", true),
+      limitation("Cluster-scoped admission changes", failed, "unknown"),
+    ]);
+    expect(mixed.open).toEqual([
+      "Container logs: Forbidden: cannot read pod logs",
+      `Cluster-scoped admission changes: ${watched} · ${failed}`,
+    ]);
+    expect(mixed.routine).toEqual([]);
   });
   it("keeps history-only neutral and unknown limitations verbatim", () => {
     expect(
