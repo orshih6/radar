@@ -54,10 +54,18 @@ export interface InvestigationOpening extends InvestigationTargetIdentity {
 // When a run's question was first asked: its own start, unless it re-ran or
 // narrowed an earlier question. A run built from it keeps that time, so its
 // look-back still covers the incident the engineer described.
+// Radar accepts an asking time from the last 30 days; an older question is
+// asked again from now rather than refused.
+const ASKED_AT_LIMIT_MS = 29 * 24 * 60 * 60 * 1000;
+
 export function questionAskedAt(
   run: InvestigationOpening & { createdAt: string },
+  now = Date.now(),
 ): string | undefined {
-  return run.question ? (run.askedAt ?? run.createdAt) : undefined;
+  if (!run.question) return undefined;
+  const askedAt = run.askedAt ?? run.createdAt;
+  const age = now - Date.parse(askedAt);
+  return age >= 0 && age < ASKED_AT_LIMIT_MS ? askedAt : undefined;
 }
 
 // A run opened by a question alone has no resource: no Apply, no
@@ -90,6 +98,7 @@ export function formatQuestionScope(run: InvestigationOpening): string {
 // clicking it doesn't want.
 export function rerunOpening(
   run: InvestigationOpening & { issueId?: string; createdAt: string },
+  now = Date.now(),
 ): InvestigationOpening & { issueId?: string; fresh: true } {
   return {
     kind: run.kind,
@@ -101,6 +110,6 @@ export function rerunOpening(
     question: run.question,
     namespaces: run.namespaces,
     lookBack: run.lookBack,
-    askedAt: questionAskedAt(run),
+    askedAt: questionAskedAt(run, now),
   };
 }

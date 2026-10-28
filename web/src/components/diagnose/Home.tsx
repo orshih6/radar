@@ -297,10 +297,31 @@ export function RecentList({
     );
   }
 
+  // After the first answer a failed refresh keeps the last list, and says so.
+  const staleNote =
+    loaded && loadFailed ? (
+      <div
+        role="status"
+        className="mb-2 flex items-center justify-between gap-2 rounded-md border border-theme-border px-2.5 py-1.5 text-[11px] leading-snug text-theme-text-secondary"
+      >
+        <span>Couldn’t refresh investigations; showing the last list.</span>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="shrink-0 font-medium text-theme-text-primary hover:underline"
+          >
+            Try again
+          </button>
+        )}
+      </div>
+    ) : null;
+
   if (runs.length === 0) {
     return (
       <div>
         {degradedNote}
+        {staleNote}
         <div className="flex flex-col items-center px-4 py-12 text-center">
           <Sparkles className="mb-3 h-7 w-7 text-accent" />
           <div className="text-sm font-medium text-theme-text-primary">
@@ -330,6 +351,7 @@ export function RecentList({
   return (
     <div className="space-y-4">
       {degradedNote}
+      {staleNote}
       <h2 className="px-2 text-sm font-medium text-theme-text-secondary">
         Investigations
       </h2>

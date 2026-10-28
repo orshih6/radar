@@ -47,6 +47,7 @@ beforeEach(() => {
   state.issues = [];
   state.pinIssues = [];
   state.searchHits = [];
+  state.actives = ["shop"];
   const element = document.createElement("div");
   document.body.appendChild(element);
   root = createRoot(element);
@@ -97,6 +98,8 @@ describe("QuestionComposer", () => {
       question: "checkout returns 502s",
       namespaces: ["shop"],
       lookBack: "1h",
+      askedAt: undefined,
+      fromComposer: true,
     });
   });
 
@@ -228,19 +231,48 @@ describe("QuestionComposer", () => {
     ).toBe("6h");
   });
 
-  it("clears a question that became a run, but not newer words", async () => {
-    state.questionDraft = { seq: 1, text: "question A" };
+  it("hands a submitted question to its start, not the draft", async () => {
     await render();
-    state.questionDraft = { seq: 2, consumed: "question A" };
-    await render();
-    expect(textarea().value).toBe("");
+    await type("question A");
+    await press("Enter");
+    await act(async () => root.render(<></>));
+    expect(state.saveQuestionDraft).toHaveBeenLastCalledWith({});
+  });
 
-    state.questionDraft = { seq: 3, text: "question A" };
+  it("does not let a returned question overwrite newer words", async () => {
     await render();
     await type("question B");
-    state.questionDraft = { seq: 4, consumed: "question A" };
+    state.questionDraft = { seq: 2, text: "question A", restore: true };
     await render();
     expect(textarea().value).toBe("question B");
+  });
+
+  it("keeps when a handed-over question was first asked until it is edited", async () => {
+    state.questionDraft = {
+      seq: 1,
+      text: "checkout 502s",
+      askedAt: "2026-10-27T09:00:00Z",
+    };
+    await render();
+    await press("Enter");
+    expect(state.openInvestigation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ askedAt: "2026-10-27T09:00:00Z" }),
+    );
+    await type("checkout 502s again");
+    await press("Enter");
+    expect(state.openInvestigation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ askedAt: undefined }),
+    );
+  });
+
+  it("opens the picker when asked to choose a resource", async () => {
+    state.questionDraft = { seq: 1, text: "why?", pickResource: true };
+    await render();
+    expect(
+      document.querySelector(
+        'input[aria-label="Search for a resource to pin"]',
+      ),
+    ).not.toBeNull();
   });
 
   it("pins the highlighted search result with the keyboard", async () => {
@@ -284,5 +316,17 @@ describe("QuestionComposer", () => {
     ).toContain("Service");
     await key("Enter");
     expect(document.body.textContent).toContain("Service shop/api");
+  });
+
+  it("starts across the cluster when more namespaces are picked than a run takes", async () => {
+    state.actives = Array.from({ length: 21 }, (_, i) => `ns-${i}`);
+    await render();
+    expect(document.body.textContent).toContain("All namespaces (21 selected)");
+    await type("why?");
+    await press("Enter");
+    expect(state.openInvestigation).toHaveBeenLastCalledWith(
+      expect.objectContaining({ namespaces: [] }),
+    );
+    state.actives = ["shop"];
   });
 });

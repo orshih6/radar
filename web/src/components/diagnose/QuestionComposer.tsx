@@ -24,6 +24,7 @@ import { formatInvestigationTarget } from "./target";
 
 export const LOOK_BACKS = ["15m", "1h", "6h", "24h"] as const;
 const DEFAULT_LOOK_BACK = "1h";
+const MAX_START_NAMESPACES = 20;
 
 const chipClass =
   "inline-flex max-w-full items-center gap-1 rounded-md border border-theme-border bg-theme-elevated px-2 py-0.5 text-xs text-theme-text-secondary";
@@ -44,7 +45,13 @@ export function QuestionComposer({
   const [lookBack, setLookBack] = useState<string>(
     questionDraft?.lookBack ?? DEFAULT_LOOK_BACK,
   );
-  const [pickerOpen, setPickerOpen] = useState(false);
+  // A handed-over question keeps when it was first asked until it is edited.
+  const [inherited, setInherited] = useState(
+    questionDraft?.askedAt && questionDraft.text
+      ? { text: questionDraft.text.trim(), askedAt: questionDraft.askedAt }
+      : null,
+  );
+  const [pickerOpen, setPickerOpen] = useState(!!questionDraft?.pickResource);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const pickerInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,7 +60,11 @@ export function QuestionComposer({
   const [namespaces, setNamespaces] = useState<string[] | null>(
     questionDraft?.namespaces ?? null,
   );
-  const startIn = namespaces ?? scope?.actives ?? [];
+  const picked = namespaces ?? scope?.actives ?? [];
+  // Past a handful of namespaces, the whole cluster is the honest place to
+  // start, and the backend accepts at most MAX_START_NAMESPACES.
+  const tooMany = picked.length > MAX_START_NAMESPACES;
+  const startIn = tooMany ? [] : picked;
 
   // Suggestions follow what the question is about: the pinned resource's
   // own issues, or the issues where the namespaces say to start.
@@ -77,12 +88,23 @@ export function QuestionComposer({
     if (pickerOpen) pickerInputRef.current?.focus();
   }, [pickerOpen]);
 
-  const unsent = useRef({ text, pin, namespaces, lookBack });
-  unsent.current = { text, pin, namespaces, lookBack };
+  const unsent = useRef({ text, pin, namespaces, lookBack, inherited });
+  unsent.current = { text, pin, namespaces, lookBack, inherited };
+  // A submitted question belongs to its start, not the draft; the start gives
+  // it back if it never becomes a run.
+  const submitted = useRef(false);
   useEffect(
     () => () => {
+      if (submitted.current) {
+        saveQuestionDraft({});
+        return;
+      }
       const draft = unsent.current;
       saveQuestionDraft({
+        askedAt:
+          draft.inherited?.text === draft.text.trim()
+            ? draft.inherited.askedAt
+            : undefined,
         text: draft.text,
         pin: draft.pin ?? undefined,
         namespaces: draft.namespaces ?? undefined,
@@ -98,25 +120,27 @@ export function QuestionComposer({
   useEffect(() => {
     if (!questionDraft || questionDraft.seq === appliedSeq.current) return;
     appliedSeq.current = questionDraft.seq;
-    if (questionDraft.consumed !== undefined) {
-      if (unsent.current.text.trim() === questionDraft.consumed) {
-        setText("");
-        setPin(null);
-      }
-      return;
-    }
+    if (questionDraft.restore && unsent.current.text.trim()) return;
+    submitted.current = false;
     setText(questionDraft.text ?? "");
+    setInherited(
+      questionDraft.askedAt && questionDraft.text
+        ? { text: questionDraft.text.trim(), askedAt: questionDraft.askedAt }
+        : null,
+    );
     setPin(questionDraft.pin ?? null);
     if (questionDraft.namespaces) setNamespaces(questionDraft.namespaces);
     if (questionDraft.lookBack) setLookBack(questionDraft.lookBack);
-    setPickerOpen(false);
-    textRef.current?.focus();
+    setPickerOpen(!!questionDraft.pickResource);
+    if (!questionDraft.pickResource) textRef.current?.focus();
   }, [questionDraft]);
 
   const question = text.trim();
   const submit = () => {
     if (!question) return;
+    submitted.current = true;
     openInvestigation({
+      fromComposer: true,
       kind: pin?.kind ?? "",
       group: pin?.group ?? "",
       namespace: pin?.namespace ?? "",
@@ -124,6 +148,7 @@ export function QuestionComposer({
       question,
       namespaces: pin ? [] : startIn,
       lookBack,
+      askedAt: inherited?.text === question ? inherited.askedAt : undefined,
     });
   };
 
@@ -134,9 +159,12 @@ export function QuestionComposer({
     textRef.current?.focus();
   };
 
-  const addable = (scope?.accessibleNamespaces ?? []).filter(
-    (ns) => !startIn.includes(ns),
-  );
+  const addable =
+    startIn.length >= MAX_START_NAMESPACES
+      ? []
+      : (scope?.accessibleNamespaces ?? []).filter(
+          (ns) => !startIn.includes(ns),
+        );
 
   return (
     <section className="mx-auto w-full max-w-2xl">
@@ -200,7 +228,17 @@ export function QuestionComposer({
             <>
               <span className="text-xs text-theme-text-tertiary">Start in</span>
               {startIn.length === 0 ? (
-                <span className={chipClass}>All namespaces</span>
+                <span
+                  className={chipClass}
+                  title={
+                    tooMany
+                      ? `${picked.length} namespaces are selected; investigations start across the cluster past ${MAX_START_NAMESPACES}.`
+                      : undefined
+                  }
+                >
+                  All namespaces
+                  {tooMany ? ` (${picked.length} selected)` : ""}
+                </span>
               ) : (
                 startIn.map((ns) => (
                   <span key={ns} className={chipClass}>

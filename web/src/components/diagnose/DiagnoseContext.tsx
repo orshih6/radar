@@ -63,6 +63,9 @@ export interface Target {
   /** When the question was first asked, for a run that re-runs or narrows
    *  an earlier one; absent means now. */
   askedAt?: string;
+  /** Started from the question composer, which hands its draft over to the
+   *  start: a start that never becomes a run gives the question back. */
+  fromComposer?: boolean;
 }
 export type DiagnoseView = "home" | "investigation";
 
@@ -75,9 +78,13 @@ export interface QuestionDraft {
   pin?: { kind: string; group: string; namespace: string; name: string };
   namespaces?: string[];
   lookBack?: string;
-  /** A question that became a run. A composer still showing exactly these
-   *  words clears; one holding newer words keeps them. */
-  consumed?: string;
+  /** A question handed back because its start never became a run: a
+   *  composer already holding other words keeps them. */
+  restore?: boolean;
+  /** Open the resource picker with it: choose the resource to ask about. */
+  pickResource?: boolean;
+  /** When the handed-over question was first asked; kept while its words are. */
+  askedAt?: string;
 }
 
 // Setup readiness of local AI investigations, derived from the agents API:
@@ -527,6 +534,32 @@ function RoutedDiagnoseProvider({
   const [questionDraft, setQuestionDraft] = useState<QuestionDraft | null>(
     null,
   );
+  const consentApprovalRef = useRef(0);
+  // A question that never became a run goes back to the composer, unless the
+  // engineer has written something else there since.
+  const giveQuestionBack = useCallback((t: Target) => {
+    if (!t.fromComposer || !t.question) return;
+    setQuestionDraft((previous) =>
+      previous?.text?.trim()
+        ? previous
+        : {
+            seq: (previous?.seq ?? 0) + 1,
+            text: t.question,
+            pin: t.name
+              ? {
+                  kind: t.kind,
+                  group: t.group,
+                  namespace: t.namespace,
+                  name: t.name,
+                }
+              : undefined,
+            namespaces: t.namespaces?.length ? t.namespaces : undefined,
+            lookBack: t.lookBack,
+            askedAt: t.askedAt,
+            restore: true,
+          },
+    );
+  }, []);
   const [startFailure, setStartFailure] = useState<{
     message: string;
     refusal: InvestigationRefusal | null;
@@ -828,12 +861,6 @@ function RoutedDiagnoseProvider({
           prev.some((r) => r.id === run.id) ? prev : [run, ...prev],
         );
         if (seq !== startSeqRef.current) return;
-        if (t.question) {
-          setQuestionDraft((previous) => ({
-            seq: (previous?.seq ?? 0) + 1,
-            consumed: t.question,
-          }));
-        }
         setActiveRunId(run.id);
         setView("investigation");
         writeFocusedRunID(run.id, true);
@@ -843,6 +870,7 @@ function RoutedDiagnoseProvider({
         // fetched; refresh it so the picker shows what's installed now.
         void recheckAgents();
         if (seq !== startSeqRef.current) return;
+        giveQuestionBack(t);
         setStartFailure({
           message:
             e instanceof DiagnoseError
@@ -858,22 +886,6 @@ function RoutedDiagnoseProvider({
     (t: Target) => {
       setStartFailure(null);
       setConsentError(null);
-      if (t.question) {
-        setQuestionDraft((previous) => ({
-          seq: (previous?.seq ?? 0) + 1,
-          text: t.question,
-          pin: t.name
-            ? {
-                kind: t.kind,
-                group: t.group,
-                namespace: t.namespace,
-                name: t.name,
-              }
-            : undefined,
-          namespaces: t.namespaces,
-          lookBack: t.lookBack,
-        }));
-      }
       setOpen(true);
       if (!hosted && !consentSurface) {
         setPendingTarget(null);
@@ -1156,11 +1168,15 @@ function RoutedDiagnoseProvider({
     consentBusyRef.current = true;
     setConsentError(null);
     const t = pendingTarget;
+    const approval = ++consentApprovalRef.current;
     // The server ENFORCES consent at start, so the acknowledgment must land
     // before the run request — awaiting also makes it durable for the CLI.
     recordConsent(consentSurface)
       .then(() => {
         setConsented((prev) => ({ ...prev, [consentSurface]: true }));
+        // Cancelled while the acknowledgment was in flight: consent is
+        // recorded, but the start the engineer walked away from never runs.
+        if (approval !== consentApprovalRef.current) return;
         // Cleared only on success: a failed write keeps the consent card up
         // (needsConsent = !!pendingTarget) so "try again" works in place.
         setPendingTarget(null);
@@ -1182,11 +1198,13 @@ function RoutedDiagnoseProvider({
       });
   }, [consentSurface, pendingTarget]);
   const cancelConsent = useCallback(() => {
+    consentApprovalRef.current++;
+    if (pendingTarget) giveQuestionBack(pendingTarget);
     setPendingTarget(null);
     setConsentError(null);
     setOpen(true);
     if (!activeRunIdRef.current) setView("home");
-  }, []);
+  }, [pendingTarget, giveQuestionBack]);
   const dismissError = useCallback(() => setStartFailure(null), []);
 
   // Reserve a right gutter on the CONTENT area (not the navbar/rail — those stay

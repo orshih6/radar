@@ -1,0 +1,132 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { DiagnoseError } from "../../api/diagnose";
+import { DiagnoseProvider, useDiagnose } from "./DiagnoseContext";
+
+const api = vi.hoisted(() => ({
+  createRun: vi.fn(),
+  recordConsent: vi.fn(),
+  consented: {} as Record<string, boolean>,
+}));
+
+vi.mock("../../api/diagnose", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  fetchAgents: async () => ({
+    enabled: true,
+    eligible: true,
+    consented: api.consented,
+    agents: [
+      {
+        name: "claude",
+        label: "Claude Code",
+        path: "/bin/claude",
+        version: "",
+        present: true,
+        supported: true,
+        profiles: ["safeguarded"],
+        consentSurfaces: { safeguarded: "claude:safeguarded" },
+        questions: true,
+      },
+    ],
+  }),
+  listRuns: async () => ({ runs: [] }),
+  getRun: vi.fn(),
+  createRun: api.createRun,
+  recordConsent: api.recordConsent,
+}));
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+let root: Root;
+let diagnose: ReturnType<typeof useDiagnose>;
+
+function Probe() {
+  diagnose = useDiagnose();
+  return null;
+}
+
+const flush = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+const question = {
+  kind: "",
+  group: "",
+  namespace: "",
+  name: "",
+  question: "checkout returns 502s",
+  namespaces: ["shop"],
+  lookBack: "1h",
+  fromComposer: true,
+};
+
+beforeEach(async () => {
+  api.createRun.mockReset();
+  api.recordConsent.mockReset();
+  api.consented = {};
+  localStorage.clear();
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  root = createRoot(element);
+  await act(async () =>
+    root.render(
+      <DiagnoseProvider browserURLState={false}>
+        <Probe />
+      </DiagnoseProvider>,
+    ),
+  );
+  await flush();
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  document.body.replaceChildren();
+});
+
+describe("starting from a question", () => {
+  it("never starts a run whose consent was cancelled while being recorded", async () => {
+    let recorded!: () => void;
+    api.recordConsent.mockReturnValue(
+      new Promise<void>((resolve) => (recorded = resolve)),
+    );
+    await act(async () => diagnose.openInvestigation(question));
+    expect(diagnose.needsConsent).toBe(true);
+    await act(async () => diagnose.approveConsent());
+    await act(async () => diagnose.cancelConsent());
+    await act(async () => recorded());
+    await flush();
+    expect(api.createRun).not.toHaveBeenCalled();
+    expect(diagnose.questionDraft?.text).toBe("checkout returns 502s");
+  });
+
+  it("gives a refused start's question back to the composer", async () => {
+    api.consented = { "claude:safeguarded": true };
+    await act(async () => diagnose.recheckAgents());
+    api.createRun.mockRejectedValue(
+      new DiagnoseError(409, "too many investigations running"),
+    );
+    await act(async () => diagnose.openInvestigation(question));
+    await flush();
+    expect(diagnose.startError).toContain("too many");
+    expect(diagnose.questionDraft).toMatchObject({
+      text: "checkout returns 502s",
+      namespaces: ["shop"],
+      restore: true,
+    });
+  });
+
+  it("leaves a saved draft alone when a run is started from elsewhere", async () => {
+    api.consented = { "claude:safeguarded": true };
+    await act(async () => diagnose.recheckAgents());
+    await act(async () => diagnose.saveQuestionDraft({ text: "draft B" }));
+    api.createRun.mockRejectedValue(new DiagnoseError(409, "refused"));
+    await act(async () =>
+      diagnose.openInvestigation({ ...question, fromComposer: undefined }),
+    );
+    await flush();
+    expect(diagnose.questionDraft?.text).toBe("draft B");
+  });
+});

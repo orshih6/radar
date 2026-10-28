@@ -15,14 +15,39 @@ export function QuestionFocus({
   focus,
   onOpenResource,
   onInvestigate,
+  onChooseResource,
   disabled,
 }: {
   focus: InvestigationTargetIdentity[];
   onOpenResource?: (ref: DiagnosisResourceRef) => void;
   onInvestigate: (resource: InvestigationTargetIdentity) => void;
+  /** Ask the same question about a resource the engineer picks. */
+  onChooseResource: () => void;
   disabled?: boolean;
 }) {
-  if (focus.length === 0) return null;
+  const choose = (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onChooseResource}
+      className="text-xs text-accent-text hover:underline disabled:opacity-50"
+    >
+      {focus.length > 0
+        ? "Choose another resource…"
+        : "Choose a resource to investigate…"}
+    </button>
+  );
+  if (focus.length === 0) {
+    return (
+      <section aria-label="Focused on" className="card-inner px-3 py-2">
+        <p className="text-xs text-theme-text-tertiary">
+          This assessment didn’t single out one resource Radar read. A fix is
+          applied from an investigation of the resource it changes.
+        </p>
+        <div className="mt-1">{choose}</div>
+      </section>
+    );
+  }
   return (
     <section aria-label="Focused on" className="card-inner px-3 py-2">
       <h3 className="text-xs font-medium text-theme-text-tertiary">
@@ -62,9 +87,12 @@ export function QuestionFocus({
           );
         })}
       </ul>
-      <p className="mt-1.5 text-[11px] text-theme-text-tertiary">
-        A fix is applied from an investigation of the resource it changes.
-      </p>
+      <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[11px] text-theme-text-tertiary">
+          A fix is applied from an investigation of the resource it changes.
+        </p>
+        {choose}
+      </div>
     </section>
   );
 }

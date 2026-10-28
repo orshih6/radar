@@ -5,6 +5,7 @@ import {
   formatInvestigationTitle,
   formatQuestionScope,
   isQuestionOnly,
+  questionAskedAt,
   rerunOpening,
   runTargetKey,
 } from "./target";
@@ -100,18 +101,22 @@ describe("question runs", () => {
 });
 
 describe("rerunOpening", () => {
+  const now = Date.parse("2026-10-28T12:00:00Z");
   it("starts the same question again in a new session", () => {
     expect(
-      rerunOpening({
-        kind: "",
-        group: "",
-        namespace: "",
-        name: "",
-        question: "checkout is slow",
-        namespaces: ["shop"],
-        lookBack: "6h",
-        createdAt: "2026-10-27T09:00:00Z",
-      }),
+      rerunOpening(
+        {
+          kind: "",
+          group: "",
+          namespace: "",
+          name: "",
+          question: "checkout is slow",
+          namespaces: ["shop"],
+          lookBack: "6h",
+          createdAt: "2026-10-27T09:00:00Z",
+        },
+        now,
+      ),
     ).toEqual({
       kind: "",
       group: "",
@@ -135,12 +140,36 @@ describe("rerunOpening", () => {
       createdAt: "2026-10-28T09:00:00Z",
     };
     expect(
-      rerunOpening({
-        ...base,
-        question: "why?",
-        askedAt: "2026-10-27T09:00:00Z",
-      }).askedAt,
+      rerunOpening(
+        {
+          ...base,
+          question: "why?",
+          askedAt: "2026-10-27T09:00:00Z",
+        },
+        now,
+      ).askedAt,
     ).toBe("2026-10-27T09:00:00Z");
-    expect(rerunOpening(base).askedAt).toBeUndefined();
+    expect(rerunOpening(base, now).askedAt).toBeUndefined();
+  });
+});
+
+describe("questionAskedAt", () => {
+  const now = Date.parse("2026-10-28T12:00:00Z");
+  it("keeps a recent asking time and drops one past Radar's window", () => {
+    const run = {
+      kind: "",
+      group: "",
+      namespace: "",
+      name: "",
+      question: "why?",
+      createdAt: "2026-10-20T12:00:00Z",
+    };
+    expect(questionAskedAt(run, now)).toBe("2026-10-20T12:00:00Z");
+    expect(
+      questionAskedAt({ ...run, createdAt: "2026-09-01T12:00:00Z" }, now),
+    ).toBeUndefined();
+    expect(
+      questionAskedAt({ ...run, question: undefined }, now),
+    ).toBeUndefined();
   });
 });

@@ -426,3 +426,24 @@ describe("RecentList beside the question composer", () => {
     expect(text).not.toContain("Open a resource");
   });
 });
+
+describe("RecentList refresh failures", () => {
+  it("says a kept list is stale when a later refresh fails", () => {
+    const text = visible(
+      renderToStaticMarkup(
+        <RecentList
+          agentLabel="Codex"
+          runs={[run()]}
+          onSelect={() => {}}
+          loaded
+          loadFailed
+          onRetry={() => {}}
+        />,
+      ),
+    );
+    expect(text).toContain(
+      "Couldn’t refresh investigations; showing the last list.",
+    );
+    expect(text).toContain("checkout");
+  });
+});

@@ -302,6 +302,7 @@ export function InvestigationView({
   const {
     refreshRuns,
     openInvestigation,
+    openQuestion,
     startError,
     startRefusal,
     dismissError,
@@ -2539,11 +2540,20 @@ export function InvestigationView({
                       ) : null}
                     </section>
 
-                    {questionOnly ? (
+                    {questionOnly && investigationCase ? (
                       <QuestionFocus
                         focus={questionFocus}
                         onOpenResource={onOpenResource}
                         disabled={interactionsBlocked}
+                        onChooseResource={() =>
+                          openQuestion({
+                            text: run.question,
+                            namespaces: run.namespaces,
+                            lookBack: run.lookBack,
+                            askedAt: questionAskedAt(run),
+                            pickResource: true,
+                          })
+                        }
                         onInvestigate={(resource) =>
                           openInvestigation({
                             ...resource,
