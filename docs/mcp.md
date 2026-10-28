@@ -1533,9 +1533,19 @@ Pipeline previews contain the first five sorted names; blocked-upgrade previews 
 
 ## Auto-instrumentation reference context
 
-Pod and supported workload detail reads can include `resourceContext.autoInstrumentation`. This describes declared OTel injection requests, not proof of successful injection, running application health or telemetry delivery. `requestsIfPodCreatedNow` evaluates current configuration for a hypothetical new Pod, including when the subject is an existing Pod. It is not an admission record: annotations, Namespace defaults and Instrumentation objects can change after creation. Inspect the actual Pod spec/init-container status and events to investigate observed mutation; this context does not infer injector identity.
+Pod and supported workload detail reads can include `resourceContext.autoInstrumentation`. This describes declared OTel injection requests, not proof of successful injection, running application health or telemetry delivery. `requestsIfPodCreatedNow` evaluates current configuration for a hypothetical new Pod, including when the subject is an existing Pod. It is neither an admission record nor a prediction of the combined webhook outcome: annotations, Namespace defaults and Instrumentation objects can change after creation. Each `resolution` checks only that language's reference. A failing selection for another requested language can prevent injection of all languages, even when this reference resolves. Container-targeting rules can also prevent mutation, sometimes without a Warning event; inspect the operator logs as well as the Pod. Inspect the actual Pod spec/init-container status and events to investigate observed mutation; this context does not infer injector identity.
 
 `namespaceDefaultsUnknown: true` explicitly qualifies unreadable Namespace inheritance, including when no Pod annotation is present. Each request names the language (the exact `instrumentation.opentelemetry.io/inject-` annotation suffix), the effective annotation's `source` and `annotationPath` JSON pointer, and a `resolution`. Template paths distinguish workload metadata from the Pod template. `resolved` and `missing` concern a named Instrumentation reference; `missing` requires a synced inventory and caller access. `unknown` means the reference or inherited Namespace annotation could not be established, not absence. `disabled` is an explicit false, and `invalid_reference` is an invalid name or namespace. A declared reference can remain visible with `unknown` because its coordinates came from the caller-readable annotation, without disclosing whether the target exists.
+
+The three `unknown` cases have different follow-ups, without changing the reference-lookup meaning:
+
+| Available qualifiers | What remains unknown | Next evidence |
+|---|---|---|
+| `namespaceDefaultsUnknown: true`, Pod `true`, no selected ref | A hidden Namespace might supply a named selection | Read this Namespace's annotations with an authorized identity |
+| `instrumentation` coordinates present with `resolution: unknown` | The caller-readable named reference could not be checked | Read that Instrumentation, or check its cache coverage/access |
+| `assumesOperatorCRDMode: true`, `resolution: unknown` | Default-selection inventory could not be checked | List Instrumentations in the Pod's namespace with an authorized identity |
+
+The CRD-mode flag is absent for unreadable Namespace inheritance: Pod=true could inherit a named reference, so Radar has not established default selection.
 
 The operator's precedence applies: a named or false Pod annotation wins; Pod=true can inherit a named Namespace annotation. For true/default selection, `default_resolved`, `default_missing` and `default_ambiguous` describe the readable namespace's CR inventory **assuming CRD mode**, explicitly marked `assumesOperatorCRDMode: true`. Operators configured to use inline instrumentation instead can differ. Language feature gates can also disable injection even when a reference resolves.
 

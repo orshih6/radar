@@ -169,3 +169,47 @@ func TestInstrumentationHiddenNamespaceAndConnectionReplacement(t *testing.T) {
 		t.Fatalf("mixed connection observation survived: %+v unavailable=%v", got, unavailable)
 	}
 }
+
+func TestInstrumentationNamespaceReadUsesSubjectNamespace(t *testing.T) {
+	initInstrumentationContextFixture(t)
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "app"}}
+	var namespaceChecks int
+	canRead := func(group, resource, namespace, verb string) bool {
+		if resource == "namespaces" {
+			namespaceChecks++
+			if group != "" || namespace != "app" || verb != "get" {
+				t.Errorf("Namespace GET used wrong request attributes: %q %q %q %q", group, resource, namespace, verb)
+				return false
+			}
+			return true
+		}
+		return group == "opentelemetry.io" && resource == "instrumentations" && namespace == "app" && verb == "list"
+	}
+	if got, unavailable := AutoInstrumentationForObject(pod, canRead); unavailable || got != nil {
+		t.Fatalf("readable empty defaults added unrelated uncertainty: %+v unavailable=%v", got, unavailable)
+	}
+	pod.Annotations = map[string]string{instrumentationAnnotationPrefix + "java": "true"}
+	got, unavailable := AutoInstrumentationForObject(pod, canRead)
+	if unavailable || got == nil || got.NamespaceDefaultsUnknown || len(got.RequestsIfPodCreatedNow) != 1 || got.RequestsIfPodCreatedNow[0].Resolution != "default_resolved" {
+		t.Fatalf("Namespace-scoped read did not resolve default selection: %+v unavailable=%v", got, unavailable)
+	}
+	if namespaceChecks != 2 {
+		t.Fatalf("expected a Namespace authorization check per observation, got%d", namespaceChecks)
+	}
+}
+
+func TestInstrumentationLanguagesResolveReferencesIndependently(t *testing.T) {
+	initInstrumentationContextFixture(t)
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "app", Namespace: "app", Annotations: map[string]string{
+		instrumentationAnnotationPrefix + "java":   "java",
+		instrumentationAnnotationPrefix + "python": "missing",
+	}}}
+	got, unavailable := AutoInstrumentationForObject(pod, func(string, string, string, string) bool { return true })
+	if unavailable || got == nil || len(got.RequestsIfPodCreatedNow) != 2 {
+		t.Fatalf("lost independent reference evidence: %+v unavailable=%v", got, unavailable)
+	}
+	java, python := got.RequestsIfPodCreatedNow[0], got.RequestsIfPodCreatedNow[1]
+	if java.Language != "java" || java.Resolution != "resolved" || python.Language != "python" || python.Resolution != "missing" {
+		t.Fatalf("reference lookup was replaced with an admission verdict: %+v", got)
+	}
+}

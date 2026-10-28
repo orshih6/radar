@@ -742,7 +742,7 @@ func TestSearchDescriptionNamesCoverageStatus(t *testing.T) {
 
 func TestAutoInstrumentationContractIsDiscoverableOnDetailTools(t *testing.T) {
 	for _, tool := range listRegisteredTools(t) {
-		has := strings.Contains(tool.Description, "NEW Pod creation only, never existing injection")
+		has := strings.Contains(tool.Description, "per-language refs for NEW Pods, never existing injection")
 		if (tool.Name == "get_resource" || tool.Name == "diagnose") != has {
 			t.Errorf("%s prospective request contract present=%v", tool.Name, has)
 		}

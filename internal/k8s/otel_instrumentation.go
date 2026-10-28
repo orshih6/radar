@@ -22,6 +22,8 @@ var instrumentationLanguages = []string{"apache-httpd", "dotnet", "go", "java", 
 // AutoInstrumentationForObject resolves declarations only. It never starts a
 // watch, reads Secret/config values, or asserts injection/delivery success.
 // canRead must include both namespace scope and the exact inventory verb.
+// A nil result with false means no context was produced; nil with true means
+// the observation was unavailable or discarded after a connection change.
 func AutoInstrumentationForObject(obj runtime.Object, canRead func(group, resource, namespace, verb string) bool) (result *resourcecontext.AutoInstrumentationContext, unavailable bool) {
 	meta, annotations, path, kind, group, ok := instrumentationPodAnnotations(obj)
 	template := path != "/metadata/annotations"
@@ -58,7 +60,9 @@ func AutoInstrumentationForObject(obj runtime.Object, canRead func(group, resour
 	}
 	var namespaceAnnotations map[string]string
 	namespaceKnown := false
-	if canRead("", "namespaces", "", "get") {
+	// Namespace GETs carry their own name as the request namespace, so a
+	// grant scoped to this Namespace is sufficient; listing all is unnecessary.
+	if canRead("", "namespaces", meta.GetNamespace(), "get") {
 		ns, found, readable := typed.ResourceCache.ReadableObject("namespaces", "", meta.GetNamespace())
 		if found && readable {
 			if ns, ok := ns.(*corev1.Namespace); ok {

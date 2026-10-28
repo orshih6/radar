@@ -87,18 +87,24 @@ type ResourceContext struct {
 	Omitted            []OmittedField      `json:"omitted,omitempty"`
 }
 
-// AutoInstrumentationContext evaluates the supported Pod/template annotations
-// against readable cached Namespace and Instrumentation metadata. Workload
-// metadata annotations do not configure the Pods created from its template.
+// AutoInstrumentationContext checks each language's current reference for a
+// hypothetical new Pod. This is not the combined webhook admission result:
+// one failing language selection can prevent injection of the other languages.
+// Workload metadata annotations do not configure Pods created from its template.
 type AutoInstrumentationContext struct {
 	// NamespaceDefaultsUnknown means Namespace annotations could not be read;
 	// absent requests do not rule out inherited configuration for other languages.
 	NamespaceDefaultsUnknown bool `json:"namespaceDefaultsUnknown,omitempty"`
 
-	RequestsIfPodCreatedNow            []InstrumentationRequest `json:"requestsIfPodCreatedNow,omitempty"`
-	IgnoredWorkloadMetadataAnnotations []string                 `json:"ignoredWorkloadMetadataAnnotations,omitempty"`
+	RequestsIfPodCreatedNow []InstrumentationRequest `json:"requestsIfPodCreatedNow,omitempty"`
+	// IgnoredWorkloadMetadataAnnotations contains supported injection annotation
+	// keys, not values, found on workload metadata instead of the Pod template.
+	// Omitted means no such supported keys were detected, not all keys checked.
+	IgnoredWorkloadMetadataAnnotations []string `json:"ignoredWorkloadMetadataAnnotations,omitempty"`
 }
 
+// InstrumentationResolution is a per-language reference lookup result,
+// not evidence that this or any other language will be injected.
 type InstrumentationResolution string
 
 const (
@@ -122,7 +128,10 @@ type InstrumentationRequest struct {
 	Source ContextRef `json:"source"`
 	// Resolution: disabled, resolved, missing, invalid_reference, unknown,
 	// default_resolved, default_missing, or default_ambiguous. Missing requires
-	// a synced, caller-readable inventory; unknown never means absent.
+	// a synced, caller-readable inventory; unknown never means absent. Unknown
+	// can reflect hidden Namespace inheritance, a named ref that could not be
+	// checked, or unreadable default-selection inventory; inspect the context
+	// qualifiers and declared Instrumentation coordinates to choose a follow-up.
 	Resolution InstrumentationResolution `json:"resolution"`
 	// Instrumentation is the declared/selected reference. When Resolution is
 	// unknown a named annotation still supplies coordinates, not existence proof.
