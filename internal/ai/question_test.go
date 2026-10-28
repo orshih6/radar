@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/skyhook-io/radar/pkg/investigation"
 )
@@ -74,6 +75,7 @@ func TestApplyNeedsAResource(t *testing.T) {
 }
 
 func TestQuestionSurvivesRestart(t *testing.T) {
+	asked := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
 	dbPath := filepath.Join(t.TempDir(), "ai-runs.db")
 	st, err := OpenRunStore(dbPath)
 	if err != nil {
@@ -82,7 +84,7 @@ func TestQuestionSurvivesRestart(t *testing.T) {
 	st.SaveRun(RunSummary{
 		ID: "run-q", Context: "ctx-a", Agent: "claude", Profile: ExecutionProfileSafeguarded,
 		Question: "checkout is slow", Namespaces: []string{"shop", "payments"}, LookBack: "6h",
-		Status: "done", SessionID: "s", CreatedAt: nowUTC(), UpdatedAt: nowUTC(),
+		AskedAt: &asked, Status: "done", SessionID: "s", CreatedAt: nowUTC(), UpdatedAt: nowUTC(),
 	})
 	st.Close()
 
@@ -97,7 +99,8 @@ func TestQuestionSurvivesRestart(t *testing.T) {
 		t.Fatal("run not reloaded")
 	}
 	got := r.Summary()
-	if got.Question != "checkout is slow" || !slices.Equal(got.Namespaces, []string{"shop", "payments"}) || got.LookBack != "6h" {
+	if got.Question != "checkout is slow" || !slices.Equal(got.Namespaces, []string{"shop", "payments"}) || got.LookBack != "6h" ||
+		got.AskedAt == nil || !got.AskedAt.Equal(asked) || !r.askedAt().Equal(asked) {
 		t.Fatalf("reloaded summary lost the opening question: %+v", got)
 	}
 }

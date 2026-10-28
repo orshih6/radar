@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/skyhook-io/radar/internal/ai"
@@ -284,5 +285,27 @@ func TestParseDiagnoseQuestionNormalizesScope(t *testing.T) {
 	}
 	if _, _, _, msg := parseDiagnoseQuestion("why?", many, ""); msg == "" {
 		t.Fatal("more namespaces than the cap must be refused")
+	}
+}
+
+func TestParseDiagnoseAskedAt(t *testing.T) {
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	if got, msg := parseDiagnoseAskedAt("", "why?", now); msg != "" || !got.IsZero() {
+		t.Fatalf("empty means now: %v %q", got, msg)
+	}
+	if got, msg := parseDiagnoseAskedAt("2026-10-27T09:30:00+02:00", "why?", now); msg != "" || !got.Equal(time.Date(2026, 10, 27, 7, 30, 0, 0, time.UTC)) {
+		t.Fatalf("an earlier asking time is kept: %v %q", got, msg)
+	}
+	for name, raw := range map[string]string{
+		"not a time": "yesterday",
+		"future":     "2026-10-29T12:00:00Z",
+		"too old":    "2026-08-01T12:00:00Z",
+	} {
+		if _, msg := parseDiagnoseAskedAt(raw, "why?", now); msg == "" {
+			t.Errorf("%s: %q must be refused", name, raw)
+		}
+	}
+	if _, msg := parseDiagnoseAskedAt("2026-10-27T09:30:00Z", "", now); msg == "" {
+		t.Fatal("askedAt without a question must be refused")
 	}
 }

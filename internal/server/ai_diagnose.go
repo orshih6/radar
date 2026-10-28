@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
@@ -330,6 +331,31 @@ func parseDiagnoseQuestion(rawQuestion string, rawNamespaces []string, rawLookBa
 	return question, namespaces, lookBack, ""
 }
 
+// maxAskedAtAge bounds how far back a re-run or narrowed question may say it
+// was first asked.
+const maxAskedAtAge = 30 * 24 * time.Hour
+
+// parseDiagnoseAskedAt reads when a question was first asked, for a run that
+// re-runs or narrows an earlier one. Empty means now. It returns a non-empty
+// message for a 400.
+func parseDiagnoseAskedAt(raw, question string, now time.Time) (time.Time, string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, ""
+	}
+	if question == "" {
+		return time.Time{}, "askedAt needs a question"
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, "askedAt must be an RFC 3339 time"
+	}
+	if t.After(now.Add(time.Minute)) || t.Before(now.Add(-maxAskedAtAge)) {
+		return time.Time{}, "askedAt must be within the last 30 days"
+	}
+	return t.UTC(), ""
+}
+
 // validReasoningEffort allows the empty (default) value or one of Codex's
 // reasoning-effort levels — never an arbitrary string passed into CLI config.
 func validReasoningEffort(e string) bool {
@@ -360,6 +386,7 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 		Question              string   `json:"question"`
 		Namespaces            []string `json:"namespaces"`
 		LookBack              string   `json:"lookBack"`
+		AskedAt               string   `json:"askedAt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		s.writeError(w, http.StatusBadRequest, "invalid request body")
@@ -370,6 +397,11 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	namespace := strings.TrimSpace(body.Namespace)
 	group := strings.ToLower(strings.TrimSpace(body.Group))
 	question, namespaces, lookBack, msg := parseDiagnoseQuestion(body.Question, body.Namespaces, body.LookBack)
+	if msg != "" {
+		s.writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	askedAt, msg := parseDiagnoseAskedAt(body.AskedAt, question, time.Now())
 	if msg != "" {
 		s.writeError(w, http.StatusBadRequest, msg)
 		return
@@ -442,7 +474,7 @@ func (s *Server) handleDiagnoseStart(w http.ResponseWriter, r *http.Request) {
 	// than relying on the agent to self-report it. Best effort: "" (unknown) on miss.
 	spec := ai.StartSpec{
 		Kind: kind, Group: group, Namespace: namespace, Name: name,
-		Question: question, Namespaces: namespaces, LookBack: lookBack,
+		Question: question, Namespaces: namespaces, LookBack: lookBack, AskedAt: askedAt,
 		Agent: agent, Profile: profile, Model: model, Effort: effort,
 	}
 	if targeted {

@@ -98,7 +98,11 @@ type Run struct {
 	Question   string
 	Namespaces []string
 	LookBack   string
-	CreatedAt  time.Time
+	// AskedAt is when the engineer first asked Question; zero means at
+	// CreatedAt. A run narrowed or re-run from an earlier one keeps the
+	// earlier time, so its look-back still covers the same incident.
+	AskedAt   time.Time
+	CreatedAt time.Time
 	// OwnerPID is the process that owns this run's lifecycle. Persisted so a
 	// second process sharing the history DB (standalone beside a long-running
 	// instance) can tell a LIVE foreign run from one orphaned by a crash.
@@ -145,15 +149,16 @@ type RunSummary struct {
 	ManagedBy string                `json:"managedBy,omitempty"`
 	Health    *ResourceHealthSignal `json:"health,omitempty"`
 	// Question is the run's opening question, not a later turn's.
-	Question   string    `json:"question,omitempty"`
-	Namespaces []string  `json:"namespaces,omitempty"`
-	LookBack   string    `json:"lookBack,omitempty"`
-	Status     string    `json:"status"`
-	SessionID  string    `json:"sessionId,omitempty"`
-	OwnerPID   int       `json:"ownerPid,omitempty"`
-	Preview    string    `json:"preview,omitempty"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	Question   string     `json:"question,omitempty"`
+	Namespaces []string   `json:"namespaces,omitempty"`
+	LookBack   string     `json:"lookBack,omitempty"`
+	AskedAt    *time.Time `json:"askedAt,omitempty"`
+	Status     string     `json:"status"`
+	SessionID  string     `json:"sessionId,omitempty"`
+	OwnerPID   int        `json:"ownerPid,omitempty"`
+	Preview    string     `json:"preview,omitempty"`
+	CreatedAt  time.Time  `json:"createdAt"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
 }
 
 var (
@@ -301,6 +306,7 @@ func (m *RunManager) loadPersisted() {
 			Context: s.Context, Agent: s.Agent, Profile: s.Profile,
 			Model: s.Model, Effort: s.Effort, ManagedBy: s.ManagedBy,
 			Health: s.Health, Question: s.Question, Namespaces: s.Namespaces, LookBack: s.LookBack,
+			AskedAt:   derefTime(s.AskedAt),
 			CreatedAt: s.CreatedAt, OwnerPID: s.OwnerPID,
 			store:  m.store,
 			status: s.Status, sessionID: s.SessionID, preview: s.Preview,
@@ -527,6 +533,7 @@ type StartSpec struct {
 	Question                     string
 	Namespaces                   []string
 	LookBack                     string
+	AskedAt                      time.Time
 	Agent                        string
 	Profile                      ExecutionProfile
 	Model, Effort                string
@@ -563,10 +570,10 @@ func (m *RunManager) Start(spec StartSpec) (RunSummary, error) {
 		Name: spec.Name, Context: cur, Agent: spec.Agent, WorkDir: m.runWorkDir(id), Profile: spec.Profile,
 		Model: spec.Model, Effort: spec.Effort, ManagedBy: spec.ManagedBy, Health: spec.Health,
 		Question: spec.Question, Namespaces: spec.Namespaces, LookBack: spec.LookBack,
-		CreatedAt: nowUTC(),
-		OwnerPID:  os.Getpid(),
-		store:     m.store,
-		status:    "running", inFlight: true, updatedAt: nowUTC(),
+		AskedAt: spec.AskedAt, CreatedAt: nowUTC(),
+		OwnerPID: os.Getpid(),
+		store:    m.store,
+		status:   "running", inFlight: true, updatedAt: nowUTC(),
 		hydrated: true, // born live — its full log is in memory by construction
 		subs:     map[int]chan RunEvent{},
 	}
@@ -731,7 +738,7 @@ func (m *RunManager) executeTurns(r *Run, turn runTurn) {
 			Agent:       r.Agent, Profile: r.Profile, Model: r.Model, Effort: r.Effort,
 			Health: r.Health, WorkDir: r.WorkDir,
 			Opening: investigation.Question{
-				Text: r.Question, Namespaces: r.Namespaces, LookBack: r.LookBack, AskedAt: r.CreatedAt,
+				Text: r.Question, Namespaces: r.Namespaces, LookBack: r.LookBack, AskedAt: r.askedAt(),
 			},
 			Metrics: m.metricsForTurn(turn),
 		}, func(ev StreamEvent) {
@@ -1345,7 +1352,8 @@ func (r *Run) summaryLocked() RunSummary {
 		Context: r.Context, Agent: r.Agent, Profile: r.Profile,
 		Model: r.Model, Effort: r.Effort, ManagedBy: r.ManagedBy,
 		Health: r.Health, Question: r.Question, Namespaces: r.Namespaces, LookBack: r.LookBack,
-		Status: r.status, SessionID: r.sessionID, OwnerPID: r.OwnerPID,
+		AskedAt: optionalTime(r.AskedAt),
+		Status:  r.status, SessionID: r.sessionID, OwnerPID: r.OwnerPID,
 		Preview: r.preview, CreatedAt: r.CreatedAt, UpdatedAt: r.updatedAt,
 	}
 }
@@ -1454,6 +1462,29 @@ func (r *Run) markStale() bool {
 		c()
 	}
 	return true
+}
+
+// askedAt is when the run's question was first asked. Immutable fields, so no
+// lock needed.
+func (r *Run) askedAt() time.Time {
+	if r.AskedAt.IsZero() {
+		return r.CreatedAt
+	}
+	return r.AskedAt
+}
+
+func optionalTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
+func derefTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
 }
 
 // matchesTarget reports whether r is the same investigation as a Start request —
