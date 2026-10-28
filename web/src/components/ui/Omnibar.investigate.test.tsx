@@ -92,4 +92,14 @@ describe('Omnibar investigate row', () => {
     act(() => { investigateButton()!.click() })
     expect(onInvestigate).toHaveBeenCalledWith({ text: 'slow checkout', namespaces: ['payments'] })
   })
+
+  it('counts a long namespace list instead of naming it', () => {
+    const namespaces = Array.from({ length: 25 }, (_, i) => `ns-${i}`)
+    act(() => {
+      root.render(<Omnibar onOpenResource={vi.fn()} commandItems={[]} searchData={{ hits: [] }} seedNamespaces={namespaces} onInvestigateQuery={vi.fn()} />)
+    })
+    typeQuery('pods keep restarting')
+    expect(investigateButton()?.textContent).toContain('Investigate “pods keep restarting”')
+    expect(investigateButton()?.textContent).toContain('as a question · in 25 namespaces')
+  })
 })
