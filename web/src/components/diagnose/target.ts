@@ -37,12 +37,15 @@ export function runTargetKey(
 export function formatInvestigationTarget(
   target: InvestigationTargetIdentity,
 ): string {
-  const canonicalKind =
-    knownKindForPluralWithGroup(target.kind, target.group) ?? target.kind;
-  const kind = groupQualifiesLaneId(target.group)
-    ? `${canonicalKind}.${target.group}`
-    : canonicalKind;
+  const kind = formatInvestigationKind(target.kind, target.group);
   return `${kind} ${target.namespace ? `${target.namespace}/` : ""}${target.name}`;
+}
+
+export function formatInvestigationKind(kind: string, group: string): string {
+  const canonicalKind = knownKindForPluralWithGroup(kind, group) ?? kind;
+  return groupQualifiesLaneId(group)
+    ? `${canonicalKind}.${group}`
+    : canonicalKind;
 }
 
 export interface InvestigationOpening extends InvestigationTargetIdentity {
@@ -86,11 +89,27 @@ export function formatInvestigationTitle(run: InvestigationOpening): string {
 
 // Where and since when a question said to start, in the words the composer's
 // chips use: "shop, payments · last 1h".
-export function formatQuestionScope(run: InvestigationOpening): string {
+// A run carrying an earlier asking time looks back from then, not from now,
+// so it says when: "shop · 1h before Oct 27, 3:04 PM".
+export function formatQuestionScope(
+  run: InvestigationOpening,
+  now = new Date(),
+): string {
   const where = run.namespaces?.length
     ? run.namespaces.join(", ")
     : "All namespaces";
-  return run.lookBack ? `${where} · last ${run.lookBack}` : where;
+  if (!run.lookBack) return where;
+  const asked = run.askedAt ? new Date(run.askedAt) : null;
+  if (!asked || Number.isNaN(asked.getTime())) {
+    return `${where} · last ${run.lookBack}`;
+  }
+  const sameDay = asked.toDateString() === now.toDateString();
+  const when = asked.toLocaleString(undefined, {
+    ...(sameDay ? {} : { month: "short", day: "numeric" }),
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${where} · ${run.lookBack} before ${when}`;
 }
 
 // Investigate again: a new session about the same thing, started the same
@@ -119,5 +138,8 @@ export function rerunOpening(
 // (deployments), an agent's lowercase singular (deployment), or the Kind.
 // A resource someone will read about is named by its Kind.
 export function canonicalKind(kind: string, group: string): string {
-  return pluralToKind(kindToPluralWithGroup(kind, group));
+  // Resolve within the group first: metrics.k8s.io's "pods" are PodMetrics,
+  // not Pods.
+  const plural = kindToPluralWithGroup(kind, group);
+  return knownKindForPluralWithGroup(plural, group) ?? pluralToKind(plural);
 }

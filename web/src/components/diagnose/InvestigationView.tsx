@@ -1866,7 +1866,9 @@ export function InvestigationView({
               ? assessmentNeedsCurrentStateVerification
                 ? "Proposed before the apply attempt. Current state has not been verified."
                 : "Proposed before the latest evidence. Reassess before applying."
-              : undefined
+              : questionOnly
+                ? "To apply a fix, investigate the resource it changes from Focused on above."
+                : undefined
           }
           onApply={
             canOfferInvestigationApply({
@@ -2551,7 +2553,15 @@ export function InvestigationView({
                         focus={questionFocus}
                         stale={stale}
                         onOpenResource={onOpenResource}
-                        disabled={interactionsBlocked}
+                        // These start a new investigation, so a run that can
+                        // no longer take follow-ups doesn't block them.
+                        disabled={investigationInteractionsBlocked({
+                          streamReady,
+                          busy,
+                          requestPending,
+                          readOnly: false,
+                          verificationPending,
+                        })}
                         onChooseResource={() =>
                           openQuestion({
                             text: run.question,
@@ -2592,6 +2602,7 @@ export function InvestigationView({
 
                   <InvestigationEvidencePane
                     projection={projection}
+                    withoutTarget={questionOnly}
                     rootCauseEvidence={paneResolution}
                     investigationCase={investigationCase}
                     story={

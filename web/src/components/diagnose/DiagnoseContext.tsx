@@ -90,6 +90,9 @@ export interface QuestionDraft {
   askedAt?: string;
   /** The cluster the pin and namespaces were chosen in. */
   context?: string;
+  /** A hand-off that brings no words of its own (Ask about a resource):
+   *  whatever the engineer already wrote stays. */
+  keepWords?: boolean;
 }
 
 // Setup readiness of local AI investigations, derived from the agents API:
@@ -932,6 +935,7 @@ function RoutedDiagnoseProvider({
             "Radar can’t run this agent with a verified execution profile.",
           refusal: null,
         });
+        giveQuestionBack(t);
         setView("investigation");
         return;
       }
@@ -943,7 +947,7 @@ function RoutedDiagnoseProvider({
       setView("investigation");
       startRunRef.current(t);
     },
-    [consentSurface, hosted],
+    [consentSurface, hosted, giveQuestionBack],
   );
   const openRun = useCallback(
     (id: string) => {
@@ -1085,10 +1089,17 @@ function RoutedDiagnoseProvider({
   }, [writeFocusedRunID]);
   const openQuestion = useCallback(
     (draft: Omit<QuestionDraft, "seq">) => {
-      setQuestionDraft((previous) => ({
-        ...draft,
-        seq: (previous?.seq ?? 0) + 1,
-      }));
+      setQuestionDraft((previous) =>
+        draft.text === undefined
+          ? {
+              ...draft,
+              text: previous?.text,
+              askedAt: previous?.askedAt,
+              keepWords: true,
+              seq: (previous?.seq ?? 0) + 1,
+            }
+          : { ...draft, seq: (previous?.seq ?? 0) + 1 },
+      );
       openHome();
     },
     [openHome],

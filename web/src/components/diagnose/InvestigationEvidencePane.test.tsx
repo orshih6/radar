@@ -2802,6 +2802,21 @@ describe("cited broader cards and coverage rows", () => {
     expect(render(projection)).toContain(
       "4 results about other resources are not shown; they appear here when the assessment cites them.",
     );
+    // A question with no resource has no "other" resource to speak of.
+    expect(
+      renderToStaticMarkup(
+        <InvestigationEvidencePane
+          projection={projection}
+          collecting={false}
+          animateGroupIds={new Set()}
+          onViewSource={onViewSource}
+          onViewActivity={() => {}}
+          withoutTarget
+        />,
+      ),
+    ).toContain(
+      "4 results the assessment didn’t cite are not shown; they appear here when the assessment cites them.",
+    );
 
     const resolution = resolveInvestigationRootCauseEvidence(
       projection,

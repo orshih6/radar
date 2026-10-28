@@ -34,7 +34,7 @@ function historyDay(date: Date, now: Date): string {
   const days = daysBefore(date, now);
   if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";
-  if (days < 7) return "This week";
+  if (days < 7) return "Previous 7 days";
   return "Earlier";
 }
 
@@ -143,7 +143,9 @@ export function statusWord(status: RunSummary["status"]): {
 // markdown a headline may carry.
 function previewText(preview: string | undefined): string {
   return (preview ?? "")
-    .replace(/`|\*\*/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/`|\*\*|__/g, "")
+    .replace(/(^|\W)[*_](\S(?:[^*_\n]*\S)?)[*_](?=\W|$)/g, "$1$2")
     .replace(/\s+/g, " ")
     .trim();
 }

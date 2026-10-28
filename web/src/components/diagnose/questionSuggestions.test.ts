@@ -47,6 +47,37 @@ describe("suggestionsFromIssues", () => {
     expect(shared?.where).toBe("2 resources · web");
   });
 
+  it("counts resources, not issues, and keeps different problems apart", () => {
+    const suggestions = suggestionsFromIssues([
+      issue({
+        id: "a",
+        name: "pg",
+        kind: "Cluster",
+        group: "postgresql.cnpg.io",
+        reason: "WALArchivingFailing",
+      }),
+      issue({
+        id: "b",
+        name: "pg",
+        kind: "Cluster",
+        group: "postgresql.cnpg.io",
+        reason: "WALArchivingFailing",
+      }),
+      issue({
+        id: "c",
+        name: "pg",
+        kind: "Cluster",
+        group: "postgresql.cnpg.io",
+        reason: "BackupFailed",
+      }),
+    ]);
+    expect(suggestions.length).toBeGreaterThan(0);
+    for (const suggestion of suggestions) {
+      expect(suggestion.pin).toMatchObject({ kind: "Cluster", name: "pg" });
+      expect(suggestion.where).not.toMatch(/resources/);
+    }
+  });
+
   it("offers different kinds of problem before more of the same", () => {
     const suggestions = suggestionsFromIssues(
       [

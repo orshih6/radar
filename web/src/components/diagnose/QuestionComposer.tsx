@@ -37,6 +37,9 @@ import { formatInvestigationTarget } from "./target";
 export const LOOK_BACKS = ["15m", "1h", "6h", "24h"] as const;
 const DEFAULT_LOOK_BACK = "1h";
 const MAX_START_NAMESPACES = 20;
+// Radar refuses a longer question; a pasted or handed-over one can arrive
+// past the box's own limit.
+const MAX_QUESTION_LENGTH = 2000;
 
 // Chips state what the question carries; actions change it. They must not
 // look alike, or a scope chip reads as a menu and an action as a value.
@@ -70,6 +73,17 @@ export function QuestionComposer({
   const [pickerOpen, setPickerOpen] = useState(!!questionDraft?.pickResource);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const pickerInputRef = useRef<HTMLInputElement>(null);
+  // Focus now so typing straight away lands in the box; once new text has
+  // rendered, put the caret after it so the engineer can keep writing.
+  const focusText = () => {
+    const caretToEnd = () => {
+      const box = textRef.current;
+      box?.setSelectionRange(box.value.length, box.value.length);
+    };
+    textRef.current?.focus();
+    caretToEnd();
+    requestAnimationFrame(caretToEnd);
+  };
 
   // A pin and chosen namespaces name things in one cluster. After a cluster
   // switch they would name same-named things somewhere else, so they go; the
@@ -166,24 +180,34 @@ export function QuestionComposer({
     appliedSeq.current = questionDraft.seq;
     if (questionDraft.restore && unsent.current.text.trim()) return;
     submitted.current = false;
-    setText(questionDraft.text ?? "");
-    setInherited(
-      questionDraft.askedAt && questionDraft.text
-        ? { text: questionDraft.text.trim(), askedAt: questionDraft.askedAt }
-        : null,
-    );
+    if (!questionDraft.keepWords) {
+      setText(questionDraft.text ?? "");
+      setInherited(
+        questionDraft.askedAt && questionDraft.text
+          ? { text: questionDraft.text.trim(), askedAt: questionDraft.askedAt }
+          : null,
+      );
+    }
     setPin(questionDraft.pin ?? null);
     setNamespaces(questionDraft.namespaces ?? null);
     setChosenIn(questionDraft.context ?? currentContext);
     setDroppedForCluster(false);
     setLookBack(questionDraft.lookBack ?? DEFAULT_LOOK_BACK);
     setPickerOpen(!!questionDraft.pickResource);
-    if (!questionDraft.pickResource) textRef.current?.focus();
+    if (!questionDraft.pickResource) focusText();
   }, [questionDraft]);
 
+  // A hand-off that mounts this composer (the Omnibar row, Ask about a
+  // resource, Back to your question) lands in the box, ready for Enter.
+  useEffect(() => {
+    if (questionDraft?.seq && !questionDraft.pickResource) focusText();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
+
   const question = text.trim();
+  const tooLong = [...question].length > MAX_QUESTION_LENGTH;
   const submit = () => {
-    if (!question) return;
+    if (!question || tooLong) return;
     submitted.current = true;
     openInvestigation({
       fromComposer: true,
@@ -202,13 +226,7 @@ export function QuestionComposer({
     setText(suggestion.question);
     setPin(suggestion.pin ?? null);
     setNamespaces(suggestion.namespaces);
-    textRef.current?.focus();
-    // Once the new text renders, put the caret after it so the engineer can
-    // keep typing what they saw.
-    requestAnimationFrame(() => {
-      const box = textRef.current;
-      box?.setSelectionRange(box.value.length, box.value.length);
-    });
+    focusText();
   };
 
   const addable =
@@ -241,10 +259,16 @@ export function QuestionComposer({
           value={text}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "@" && !pin) {
-              event.preventDefault();
-              setPickerOpen(true);
-              return;
+            // "@" starting a word opens the picker; one inside a word (an
+            // email, an image digest) is just text.
+            if (event.key === "@" && !pin && !pickerOpen) {
+              const box = event.currentTarget;
+              const before = box.value.slice(0, box.selectionStart ?? 0);
+              if (before === "" || /\s$/.test(before)) {
+                event.preventDefault();
+                setPickerOpen(true);
+                return;
+              }
             }
             if (
               event.key === "Enter" &&
@@ -256,7 +280,7 @@ export function QuestionComposer({
             }
           }}
           rows={3}
-          maxLength={2000}
+          maxLength={MAX_QUESTION_LENGTH}
           aria-label="What are you seeing?"
           placeholder={
             "e.g. checkout returns 502s since the last deploy\ne.g. is catalog's memory use normal?"
@@ -345,7 +369,7 @@ export function QuestionComposer({
               Started within
             </span>
             <span
-              role="radiogroup"
+              role="group"
               aria-label="Started within"
               className="inline-flex rounded-md border border-theme-border"
             >
@@ -353,8 +377,7 @@ export function QuestionComposer({
                 <button
                   key={value}
                   type="button"
-                  role="radio"
-                  aria-checked={lookBack === value}
+                  aria-pressed={lookBack === value}
                   onClick={() => setLookBack(value)}
                   className={`px-1.5 py-0.5 text-xs first:rounded-l-md last:rounded-r-md ${
                     lookBack === value
@@ -368,7 +391,7 @@ export function QuestionComposer({
             </span>
             <button
               type="submit"
-              disabled={!question}
+              disabled={!question || tooLong}
               className="btn-brand ml-1 inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium disabled:opacity-50"
             >
               Investigate
@@ -376,6 +399,12 @@ export function QuestionComposer({
             </button>
           </span>
         </div>
+        {tooLong && (
+          <p className="border-t border-theme-border-subtle px-3 py-1.5 text-[11px] text-theme-text-tertiary">
+            Questions can be up to {MAX_QUESTION_LENGTH} characters; this one
+            has {[...question].length}.
+          </p>
+        )}
         {droppedForCluster && !pin && namespaces === null && (
           <p className="border-t border-theme-border-subtle px-3 py-1.5 text-[11px] text-theme-text-tertiary">
             The cluster changed, so the pinned resource and chosen namespaces

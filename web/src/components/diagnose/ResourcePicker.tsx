@@ -10,6 +10,7 @@ import {
   searchCoverageNote,
 } from "../ui/searchCoverageNote";
 import type { QuestionPin } from "./questionSuggestions";
+import { formatInvestigationKind } from "./target";
 
 function stillSyncing(data: SearchResult | undefined): boolean {
   return !!data?.coverage?.gaps.some((gap) => gap.code === "kind_sync_pending");
@@ -153,7 +154,7 @@ export function ResourcePicker({
                 {hit.name}
               </span>
               <span className="shrink-0 text-xs text-theme-text-tertiary">
-                {hit.kind}
+                {formatInvestigationKind(hit.kind, hit.group ?? "")}
                 {hit.namespace ? ` · ${hit.namespace}` : ""}
               </span>
             </button>

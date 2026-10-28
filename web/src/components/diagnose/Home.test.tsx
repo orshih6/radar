@@ -115,9 +115,9 @@ describe("RecentList", () => {
     ]);
     const text = visible(html);
     expect(
-      html.match(/<h3 [^>]*>(Today|Yesterday|This week|Earlier)<\/h3>/g),
+      html.match(/<h3 [^>]*>(Today|Yesterday|Previous 7 days|Earlier)<\/h3>/g),
     ).toHaveLength(3);
-    expect(html).toContain(">This week</h3>");
+    expect(html).toContain(">Previous 7 days</h3>");
     expect(html).toContain(">Earlier</h3>");
     const day = (d: Date) =>
       d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
@@ -150,7 +150,8 @@ describe("RecentList", () => {
         id: "recent",
         name: "recent",
         createdAt: recentTime,
-        preview: "MONGO_PASSWORD **broken**",
+        preview:
+          "MONGO_PASSWORD **broken**, see [the runbook](https://example.com/rb) and _why_",
       }),
     ]);
     expect(html.match(/<time /g)).toHaveLength(2);
@@ -158,7 +159,9 @@ describe("RecentList", () => {
     expect(html).toContain(`dateTime="${olderTime}"`);
     expect(html).not.toContain(`dateTime="${time(2, 14)}"`);
     expect(html).not.toContain("ago");
-    expect(visible(html)).toContain("MONGO_PASSWORD broken");
+    expect(visible(html)).toContain(
+      "MONGO_PASSWORD broken, see the runbook and why",
+    );
     expect(html).not.toContain("**");
     expect(html).toContain(">Today</h3>");
     expect(html).toContain(">Yesterday</h3>");

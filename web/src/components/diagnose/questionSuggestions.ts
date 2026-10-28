@@ -30,9 +30,10 @@ export interface QuestionSuggestion {
 }
 
 // Questions an engineer would plausibly ask about what Radar sees right now,
-// most severe first: one per kind of problem per namespace. A problem on one
+// most severe first: one per problem per namespace. A problem on one
 // resource becomes a question about that resource; the same problem on
-// several becomes a question about the namespace. A cluster with no issues
+// several becomes a question about the namespace. A resource with two issues
+// of the same name is still one resource. A cluster with no issues
 // gets no suggestions — a stock prompt would only be noise.
 export function suggestionsFromIssues(
   issues: readonly Issue[],
@@ -40,7 +41,7 @@ export function suggestionsFromIssues(
 ): QuestionSuggestion[] {
   const groups = new Map<string, Issue[]>();
   for (const issue of [...issues].sort(compareIssues)) {
-    const key = `${issue.category}\u0000${issue.namespace ?? ""}`;
+    const key = `${issueTitle(issue)}\u0000${issue.namespace ?? ""}`;
     const members = groups.get(key);
     if (members) members.push(issue);
     else groups.set(key, [issue]);
@@ -64,7 +65,10 @@ export function suggestionsFromIssues(
     const first = members[0];
     const title = issueTitle(first);
     const namespaces = first.namespace ? [first.namespace] : [];
-    if (members.length === 1) {
+    const resources = new Set(
+      members.map((m) => `${m.kind}\u0000${m.group ?? ""}\u0000${m.name}`),
+    ).size;
+    if (resources === 1) {
       const pin = {
         kind: first.kind,
         group: first.group ?? "",
@@ -89,10 +93,10 @@ export function suggestionsFromIssues(
       key,
       title,
       where: first.namespace
-        ? `${members.length} resources · ${first.namespace}`
-        : `${members.length} resources across the cluster`,
+        ? `${resources} resources · ${first.namespace}`
+        : `${resources} resources across the cluster`,
       severity: severityOf(first),
-      question: `What's causing “${title}” on ${members.length} resources ${scope}?`,
+      question: `What's causing “${title}” on ${resources} resources ${scope}?`,
       namespaces,
     });
   }

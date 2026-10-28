@@ -33,6 +33,6 @@ describe("QuestionFocus", () => {
     );
     expect(html).toContain("Deployment shop/api");
     expect(html).not.toContain("<button");
-    expect(html).toContain("Switch back to it");
+    expect(html).toContain("connect to that cluster and find");
   });
 });

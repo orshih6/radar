@@ -43,8 +43,9 @@ export function QuestionFocus({
           ))}
         </ul>
         <p className="mt-1.5 text-[11px] text-theme-text-tertiary">
-          In the cluster this investigation ran against. Switch back to it to
-          open or investigate these.
+          In the cluster this investigation ran against. This investigation
+          ended when Radar switched clusters; connect to that cluster and find
+          them there to investigate one.
         </p>
       </section>
     ) : null;

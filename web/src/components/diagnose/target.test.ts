@@ -83,6 +83,15 @@ describe("question runs", () => {
       "checkout is slow since lunch",
     );
     expect(formatQuestionScope(questionOnly)).toBe("shop, payments · last 1h");
+    const askedAt = "2026-10-27T09:00:00Z";
+    expect(
+      formatQuestionScope(
+        { ...questionOnly, askedAt },
+        new Date("2026-10-28T12:00:00Z"),
+      ),
+    ).toBe(
+      `shop, payments · 1h before ${new Date(askedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
+    );
     expect(formatQuestionScope({ ...questionOnly, namespaces: [] })).toBe(
       "All namespaces · last 1h",
     );
@@ -181,5 +190,10 @@ describe("canonicalKind", () => {
     expect(canonicalKind("deployment", "apps")).toBe("Deployment");
     expect(canonicalKind("Deployment", "apps")).toBe("Deployment");
     expect(canonicalKind("pods", "")).toBe("Pod");
+  });
+
+  it("keeps a group's own Kind when its plural matches a core one", () => {
+    expect(canonicalKind("PodMetrics", "metrics.k8s.io")).toBe("PodMetrics");
+    expect(canonicalKind("nodes", "metrics.k8s.io")).toBe("NodeMetrics");
   });
 });

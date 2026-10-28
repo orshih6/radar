@@ -137,6 +137,48 @@ describe("QuestionComposer", () => {
     expect(textarea().value).toBe("");
   });
 
+  it("holds a question longer than Radar accepts", async () => {
+    state.questionDraft = { seq: 1, text: "x".repeat(2001) };
+    await render();
+    await press("Enter");
+    expect(state.openInvestigation).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("this one has 2001");
+  });
+
+  it("types an @ inside a word as text", async () => {
+    await render();
+    await type("page oncall");
+    await press("@");
+    const pinButton = [...document.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Pin a resource"),
+    );
+    expect(pinButton?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("lands in the box when a hand-off mounts it", async () => {
+    state.questionDraft = { seq: 4, text: "catalog latency spiked" };
+    await render();
+    expect(document.activeElement).toBe(textarea());
+    expect(textarea().selectionStart).toBe("catalog latency spiked".length);
+  });
+
+  it("keeps the words when a resource is handed over without any", async () => {
+    await render();
+    await type("memory keeps climbing");
+    state.questionDraft = {
+      seq: 2,
+      pin: {
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+      },
+      keepWords: true,
+    };
+    await render();
+    expect(textarea().value).toBe("memory keeps climbing");
+  });
+
   it("asks about a handed-off resource instead of the namespaces", async () => {
     state.questionDraft = {
       seq: 1,
@@ -242,10 +284,9 @@ describe("QuestionComposer", () => {
     state.questionDraft = { seq: 3, text: "where I left off", lookBack: "6h" };
     await render();
     expect(textarea().value).toBe("where I left off");
-    expect(
-      document.querySelector('[role="radio"][aria-checked="true"]')
-        ?.textContent,
-    ).toBe("6h");
+    expect(document.querySelector('[aria-pressed="true"]')?.textContent).toBe(
+      "6h",
+    );
   });
 
   it("hands a submitted question to its start, not the draft", async () => {
@@ -290,6 +331,39 @@ describe("QuestionComposer", () => {
         'input[aria-label="Search for a resource to pin"]',
       ),
     ).not.toBeNull();
+  });
+
+  it("tells a custom kind from the built-in one it shadows", async () => {
+    state.searchHits = [
+      { score: 2, kind: "Service", group: "", namespace: "shop", name: "api" },
+      {
+        score: 1,
+        kind: "Service",
+        group: "serving.knative.dev",
+        namespace: "shop",
+        name: "api",
+      },
+    ];
+    await render();
+    await press("@");
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Search for a resource to pin"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    await act(async () => {
+      setter.call(input, "api");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const labels = [...document.querySelectorAll('[role="option"]')].map(
+      (option) => option.textContent,
+    );
+    expect(labels).toEqual([
+      expect.stringContaining("Service · shop"),
+      expect.stringContaining("Service.serving.knative.dev · shop"),
+    ]);
   });
 
   it("pins the highlighted search result with the keyboard", async () => {

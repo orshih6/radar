@@ -68,6 +68,7 @@ export function InvestigationEvidencePane({
   onViewActivity,
   onOpenResource,
   onOpenTimeline,
+  withoutTarget = false,
   afterEvidence,
   recordNotes,
   storyShell = false,
@@ -114,6 +115,9 @@ export function InvestigationEvidencePane({
   /** Explicit Activity → Findings navigation, including repeat clicks. */
   revealRequest?: { sourceId: string; requestId: number };
   onRevealReady?: (sourceId: string) => void;
+  /** A question with no resource: every result is "about another resource",
+   *  so withheld ones are counted as uncited instead. */
+  withoutTarget?: boolean;
 }) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<ReadonlySet<string>>(
     new Set(),
@@ -465,10 +469,12 @@ export function InvestigationEvidencePane({
     partition.earlier.length;
   const resultsSummary = [
     partition.hiddenBroader > 0
-      ? `${partition.hiddenBroader} about other resources not shown`
+      ? withoutTarget
+        ? `${partition.hiddenBroader} not cited, not shown`
+        : `${partition.hiddenBroader} about other resources not shown`
       : undefined,
     partition.hiddenMetrics > 0
-      ? `${partition.hiddenMetrics} broader metric ${partition.hiddenMetrics === 1 ? "result" : "results"} not shown`
+      ? `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric ${partition.hiddenMetrics === 1 ? "result" : "results"} not shown`
       : undefined,
     projection.limitations.length > 0
       ? `${projection.limitations.length} ${projection.limitations.length === 1 ? "check" : "checks"} limited`
@@ -496,9 +502,13 @@ export function InvestigationEvidencePane({
           className="text-xs text-theme-text-tertiary"
           data-testid="investigation-hidden-evidence"
         >
-          {partition.hiddenBroader === 1
-            ? "1 result about another resource is not shown; it appears here when the assessment cites it."
-            : `${partition.hiddenBroader} results about other resources are not shown; they appear here when the assessment cites them.`}
+          {withoutTarget
+            ? partition.hiddenBroader === 1
+              ? "1 result the assessment didn’t cite is not shown; it appears here when the assessment cites it."
+              : `${partition.hiddenBroader} results the assessment didn’t cite are not shown; they appear here when the assessment cites them.`
+            : partition.hiddenBroader === 1
+              ? "1 result about another resource is not shown; it appears here when the assessment cites it."
+              : `${partition.hiddenBroader} results about other resources are not shown; they appear here when the assessment cites them.`}
         </p>
       ) : null}
 
@@ -508,8 +518,8 @@ export function InvestigationEvidencePane({
           data-testid="investigation-hidden-metrics"
         >
           {partition.hiddenMetrics === 1
-            ? "1 broader metric result is not shown; it appears here when the assessment cites it."
-            : `${partition.hiddenMetrics} broader metric results are not shown; they appear here when the assessment cites them.`}
+            ? `1 ${withoutTarget ? "uncited" : "broader"} metric result is not shown; it appears here when the assessment cites it.`
+            : `${partition.hiddenMetrics} ${withoutTarget ? "uncited" : "broader"} metric results are not shown; they appear here when the assessment cites them.`}
         </p>
       ) : null}
 
