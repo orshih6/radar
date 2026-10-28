@@ -1568,7 +1568,7 @@ The three `unknown` cases have different follow-ups, without changing the refere
 |---|---|---|
 | `namespaceDefaultsUnknown: true`, Pod `true`, no selected ref | A hidden Namespace might supply a named selection | Read this Namespace's annotations with an authorized identity |
 | `instrumentation` coordinates present with `resolution: unknown` | The caller-readable named reference could not be checked | Read that Instrumentation, or check its cache coverage/access |
-| `assumesOperatorCRDMode: true`, `resolution: unknown` | Default-selection inventory could not be checked | List Instrumentations in the Pod's namespace with an authorized identity |
+| `assumesOperatorCRDMode: true`, `resolution: unknown` | Default-selection inventory could not be checked | List Instrumentations in the Pod's namespace with an authorized identity, or confirm the CRD is installed and its cache is collected/synced |
 
 The CRD-mode flag is absent for unreadable Namespace inheritance: Pod=true could inherit a named reference, so Radar has not established default selection.
 
