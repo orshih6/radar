@@ -225,7 +225,7 @@ describe("QuestionComposer", () => {
     ];
     await render();
     const text = document.body.textContent ?? "";
-    expect(text).toContain("on NetworkPolicy shop/deny-all?");
+    expect(text).toContain("NetworkPolicy shop/deny-all");
     expect(text).not.toContain("other/x");
   });
 
@@ -366,20 +366,19 @@ describe("QuestionComposer", () => {
     // The pinned resource reports the same problem it was suggested for.
     state.pinIssues = state.issues;
     await render();
-    const suggestion = [...document.querySelectorAll("button")].find((b) =>
-      b.textContent?.startsWith("What's causing"),
-    )!;
-    expect(suggestion.textContent).toContain("on Deployment shop/api");
-    await act(async () => suggestion.click());
-    expect(textarea().value).toBe(
-      suggestion.textContent?.replace(" on Deployment shop/api", ""),
-    );
-    expect(document.body.textContent).toContain("About");
-    expect(
+    const suggestions = () =>
       [...document.querySelectorAll("button")].filter((b) =>
-        b.textContent?.startsWith("What's causing"),
-      ),
-    ).toHaveLength(0);
+        b.getAttribute("aria-label")?.startsWith("Critical: Crash loop"),
+      );
+    const [suggestion] = suggestions();
+    expect(suggestion.textContent).toContain("Deployment shop/api");
+    await act(async () => suggestion.click());
+    expect(textarea().value).toBe("What's causing “Crash loop”?");
+    expect(document.body.textContent).toContain("About");
+    expect(suggestions()).toHaveLength(0);
+    // Still hidden once the engineer adds what they saw.
+    await type("What's causing “Crash loop”? Since the 2pm deploy.");
+    expect(suggestions()).toHaveLength(0);
   });
 
   it("says a failed resource search failed instead of finding nothing", async () => {

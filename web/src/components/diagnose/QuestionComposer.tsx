@@ -3,8 +3,20 @@
 // is about. It starts the same investigation, with the same Findings page, as
 // Investigate on a resource; it is not a chat.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { ArrowRight, AtSign, X } from "lucide-react";
-import { Collapse, useDebouncedValue } from "@skyhook-io/k8s-ui";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  ArrowRight,
+  AtSign,
+  CornerDownLeft,
+  X,
+} from "lucide-react";
+import {
+  Collapse,
+  ISSUE_SEVERITY_LABEL,
+  ISSUE_SEVERITY_TEXT_CLASS,
+  useDebouncedValue,
+} from "@skyhook-io/k8s-ui";
 
 import {
   type SearchResult,
@@ -101,7 +113,7 @@ export function QuestionComposer({
       (pin
         ? suggestionsForPin(pinIssues ?? [], pin)
         : suggestionsFromIssues(issuesData?.issues ?? [])
-      ).filter((suggestion) => suggestion.question !== asked),
+      ).filter((suggestion) => !asked.includes(suggestion.question)),
     [pin, pinIssues, issuesData, asked],
   );
 
@@ -198,6 +210,12 @@ export function QuestionComposer({
     setPin(suggestion.pin ?? null);
     setNamespaces(suggestion.namespaces);
     textRef.current?.focus();
+    // Once the new text renders, put the caret after it so the engineer can
+    // keep typing what they saw.
+    requestAnimationFrame(() => {
+      const box = textRef.current;
+      box?.setSelectionRange(box.value.length, box.value.length);
+    });
   };
 
   const addable =
@@ -213,8 +231,9 @@ export function QuestionComposer({
         What are you seeing?
       </h1>
       <p className="mt-1 text-sm text-theme-text-tertiary">
-        Describe the problem in your own words. {agentLabel} investigates it
-        with Radar’s read-only tools and shows what it found, with the evidence.
+        Describe a problem, or ask whether something looks right. {agentLabel}{" "}
+        investigates it with Radar’s read-only tools and shows what it found,
+        with the evidence.
       </p>
 
       <form
@@ -246,7 +265,9 @@ export function QuestionComposer({
           rows={3}
           maxLength={2000}
           aria-label="What are you seeing?"
-          placeholder="e.g. checkout returns 502s since the last deploy"
+          placeholder={
+            "e.g. checkout returns 502s since the last deploy\ne.g. is catalog's memory use normal?"
+          }
           className="block w-full resize-none rounded-t-lg bg-transparent px-3 py-2.5 text-sm text-theme-text-primary placeholder:text-theme-text-tertiary focus:outline-none"
         />
         <div className="flex flex-wrap items-center gap-1.5 border-t border-theme-border-subtle px-3 py-2">
@@ -389,18 +410,42 @@ export function QuestionComposer({
           <h2 className="text-xs font-medium text-theme-text-tertiary">
             From what Radar sees now
           </h2>
-          <ul className="mt-1.5 space-y-1">
-            {suggestions.map((suggestion) => (
-              <li key={suggestion.key}>
-                <button
-                  type="button"
-                  onClick={() => applySuggestion(suggestion)}
-                  className="w-full rounded-md px-2 py-1.5 text-left text-sm text-theme-text-secondary hover:bg-theme-hover hover:text-theme-text-primary"
-                >
-                  {suggestion.label}
-                </button>
-              </li>
-            ))}
+          <ul className="mt-1.5 divide-y divide-theme-border-subtle overflow-hidden rounded-lg border border-theme-border bg-theme-surface">
+            {suggestions.map((suggestion) => {
+              const SeverityIcon =
+                suggestion.severity === "critical"
+                  ? AlertOctagon
+                  : AlertTriangle;
+              return (
+                <li key={suggestion.key}>
+                  <button
+                    type="button"
+                    onClick={() => applySuggestion(suggestion)}
+                    aria-label={`${ISSUE_SEVERITY_LABEL[suggestion.severity]}: ${suggestion.title}, ${suggestion.where}. Puts “${suggestion.question}” in the box.`}
+                    className="group flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-theme-hover focus-visible:bg-theme-hover focus-visible:outline-none"
+                  >
+                    <SeverityIcon
+                      aria-hidden
+                      className={`h-4 w-4 shrink-0 ${ISSUE_SEVERITY_TEXT_CLASS[suggestion.severity]}`}
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium text-theme-text-primary">
+                        {suggestion.title}
+                      </span>
+                      <span className="ml-2 text-theme-text-tertiary">
+                        {suggestion.where}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-theme-text-tertiary group-hover:text-theme-text-secondary group-focus-visible:text-theme-text-secondary">
+                      <span className="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">
+                        Use
+                      </span>
+                      <CornerDownLeft aria-hidden className="h-3.5 w-3.5" />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

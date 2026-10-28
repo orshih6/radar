@@ -1,4 +1,9 @@
-import { compareIssues, issueTitle, type Issue } from "@skyhook-io/k8s-ui";
+import {
+  compareIssues,
+  issueTitle,
+  type Issue,
+  type IssueSeverity,
+} from "@skyhook-io/k8s-ui";
 
 import { formatInvestigationTarget } from "./target";
 
@@ -11,8 +16,11 @@ export interface QuestionPin {
 
 export interface QuestionSuggestion {
   key: string;
-  /** What the list shows: the question, naming its resource when it pins one. */
-  label: string;
+  /** The problem as the Issues page names it, so the row is recognizable. */
+  title: string;
+  /** Where it is: one resource, or how many resources in which namespace. */
+  where: string;
+  severity: IssueSeverity;
   /** What goes in the box. A pinned resource is named by its chip instead. */
   question: string;
   namespaces: string[];
@@ -65,18 +73,28 @@ export function suggestionsFromIssues(
       };
       suggestions.push({
         key,
-        label: `What's causing “${title}” on ${formatInvestigationTarget(pin)}?`,
+        title,
+        where: formatInvestigationTarget(pin),
+        severity: severityOf(first),
         question: `What's causing “${title}”?`,
         namespaces,
         pin,
       });
       continue;
     }
-    const where = first.namespace
+    const scope = first.namespace
       ? `in ${first.namespace}`
       : "across the cluster";
-    const question = `What's causing “${title}” on ${members.length} resources ${where}?`;
-    suggestions.push({ key, label: question, question, namespaces });
+    suggestions.push({
+      key,
+      title,
+      where: first.namespace
+        ? `${members.length} resources · ${first.namespace}`
+        : `${members.length} resources across the cluster`,
+      severity: severityOf(first),
+      question: `What's causing “${title}” on ${members.length} resources ${scope}?`,
+      namespaces,
+    });
   }
   return suggestions;
 }
@@ -109,7 +127,20 @@ export function suggestionsForPin(
       on === pinned
         ? `What's causing “${title}”?`
         : `What's causing “${title}” on ${on}?`;
-    suggestions.push({ key, label: question, question, namespaces: [], pin });
+    suggestions.push({
+      key,
+      title,
+      where: on,
+      severity: severityOf(issue),
+      question,
+      namespaces: [],
+      pin,
+    });
   }
   return suggestions;
+}
+
+// The Issues page coerces an unknown severity to warning; so does this list.
+function severityOf(issue: Issue): IssueSeverity {
+  return issue.severity === "critical" ? "critical" : "warning";
 }

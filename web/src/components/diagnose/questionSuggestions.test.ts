@@ -38,11 +38,13 @@ describe("suggestionsFromIssues", () => {
       namespace: "shop",
       name: "checkout",
     });
-    expect(one?.label).toContain("Deployment shop/checkout");
+    expect(one?.title).toBe("Crash loop");
+    expect(one?.where).toBe("Deployment shop/checkout");
     expect(one?.question).toBe("What's causing “Crash loop”?");
     const shared = suggestions.find((s) => !s.pin);
     expect(shared?.namespaces).toEqual(["web"]);
     expect(shared?.question).toContain("on 2 resources in web");
+    expect(shared?.where).toBe("2 resources · web");
   });
 
   it("offers different kinds of problem before more of the same", () => {
@@ -69,5 +71,10 @@ describe("suggestionsFromIssues", () => {
     );
     expect(suggestions).toHaveLength(3);
     expect(suggestions[0].pin?.name).toBe("b");
+    expect(suggestions.map((s) => s.severity)).toEqual([
+      "critical",
+      "warning",
+      "warning",
+    ]);
   });
 });
