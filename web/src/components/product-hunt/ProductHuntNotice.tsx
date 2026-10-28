@@ -13,6 +13,7 @@ import { isPhaseDismissed, launchDayLabel, launchPhase, markPhaseDismissed, reso
 const UTM = { utm_source: 'radar-oss', utm_medium: 'app', utm_campaign: 'ph-launch-2026-10' }
 const FEATURE_URL = `https://radarhq.io/product/ai-investigations?${new URLSearchParams(UTM)}`
 const SHOW_DELAY_MS = 10_000
+const LAUNCH_RECHECK_MS = 60 * 60_000
 
 export function shouldShowLaunchNotice(opts: {
   phase: LaunchPhase | null
@@ -40,7 +41,7 @@ export function launchLink(launch: ProductHuntLaunch): string {
 // someone who closed the one before.
 export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: UsageDataStatus | undefined; usageDataPending: boolean }) {
   const { data: capabilities } = useCapabilities()
-  const { data: versionInfo, isPending: versionPending } = useVersionCheck()
+  const { data: versionInfo, isPending: versionPending, refetch: refetchVersion } = useVersionCheck()
   const [now, setNow] = useState(() => Date.now())
   const [ready, setReady] = useState(false)
 
@@ -55,14 +56,22 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
     // Re-reads the clock for the phase change, and the update notice's
     // dismissal, which only touches localStorage.
     const poll = window.setInterval(() => setNow(Date.now()), 60_000)
-    const onUsagePrompt = () => setUsagePromptShowing(usagePromptOnScreen())
-    window.addEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+    // Picks up a launch moved or called off while this page stays open.
+    const recheck = window.setInterval(() => void refetchVersion(), LAUNCH_RECHECK_MS)
     return () => {
       window.clearTimeout(delay)
       window.clearInterval(poll)
-      window.removeEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+      window.clearInterval(recheck)
     }
-  }, [ended])
+  }, [ended, refetchVersion])
+
+  // Tracked whatever the launch, so a launch switched back on sees a usage
+  // prompt that opened meanwhile.
+  useEffect(() => {
+    const onUsagePrompt = () => setUsagePromptShowing(usagePromptOnScreen())
+    window.addEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+    return () => window.removeEventListener(USAGE_PROMPT_VISIBILITY_EVENT, onUsagePrompt)
+  }, [])
 
   const show = shouldShowLaunchNotice({
     phase,

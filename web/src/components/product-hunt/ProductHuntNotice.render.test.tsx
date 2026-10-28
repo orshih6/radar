@@ -6,10 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   launch: undefined as undefined | { enabled: boolean; url: string; start: string; end: string },
   mode: 'local',
+  refetch: vi.fn(),
+  usageOnScreen: false,
 }))
 vi.mock('../../api/client', () => ({
   useCapabilities: () => ({ data: { deployment: { mode: state.mode } } }),
-  useVersionCheck: () => ({ data: { currentVersion: '1.18.3', updateAvailable: false, installMethod: 'direct', productHuntLaunch: state.launch }, isPending: false }),
+  useVersionCheck: () => ({ data: { currentVersion: '1.18.3', updateAvailable: false, installMethod: 'direct', productHuntLaunch: state.launch }, isPending: false, refetch: state.refetch }),
+}))
+vi.mock('../usage-data/UsageDataPrompt', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../usage-data/UsageDataPrompt')>()),
+  usagePromptOnScreen: () => state.usageOnScreen,
 }))
 vi.mock('../../api/usage-data', () => ({ useSetUsageData: () => ({ mutate: vi.fn(), isPending: false }), useMarkUsagePromptShown: () => vi.fn() }))
 
@@ -32,6 +38,8 @@ beforeEach(() => {
   localStorage.clear()
   state.launch = ON
   state.mode = 'local'
+  state.refetch = vi.fn()
+  state.usageOnScreen = false
   element = document.createElement('div')
   document.body.appendChild(element)
   root = createRoot(element)
@@ -73,6 +81,24 @@ describe('ProductHuntNotice', () => {
   it('shows in-cluster only on the day', () => {
     state.mode = 'in-cluster'
     vi.setSystemTime(new Date('2026-10-28T17:00:00Z'))
+    render()
+    act(() => { vi.advanceTimersByTime(10_000) })
+    expect(element.textContent).toBe('')
+  })
+
+  it('re-checks the launch hourly while a page stays open', () => {
+    render()
+    expect(state.refetch).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(60 * 60_000) })
+    expect(state.refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays off the corner when re-enabled while the usage prompt is open', () => {
+    state.launch = OFF
+    render()
+    state.usageOnScreen = true
+    act(() => { window.dispatchEvent(new Event('radar:usage-prompt-visibility')) })
+    state.launch = ON
     render()
     act(() => { vi.advanceTimersByTime(10_000) })
     expect(element.textContent).toBe('')
