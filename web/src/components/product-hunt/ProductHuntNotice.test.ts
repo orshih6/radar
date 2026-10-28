@@ -4,7 +4,7 @@ vi.mock('../../api/client', () => ({ useCapabilities: () => ({ data: undefined }
 vi.mock('../../api/usage-data', () => ({ useSetUsageData: () => ({ mutate: vi.fn(), isPending: false }), useMarkUsagePromptShown: () => vi.fn() }))
 
 import { launchLink, shouldShowLaunchNotice } from './ProductHuntNotice'
-import { FALLBACK_LAUNCH, isPhaseDismissed, launchDayLabel, launchNoticeHoldsCorner, launchPhase, resolveLaunch } from './launchWindow'
+import { FALLBACK_LAUNCH, isPhaseDismissed, launchDayLabel, launchNoticeHoldsCorner, launchPhase, markPhaseDismissed, resolveLaunch } from './launchWindow'
 
 const launch = FALLBACK_LAUNCH
 
@@ -103,5 +103,19 @@ describe('isPhaseDismissed', () => {
     expect(launchNoticeHoldsCorner(launch, after)).toBe(false)
     store.set('radar-product-hunt-dismissed-2026-10-29-live', '1')
     expect(launchNoticeHoldsCorner(launch, during)).toBe(false)
+  })
+
+  it('frees the corner for this page when localStorage refuses the dismissal', () => {
+    const later = resolveLaunch({ enabled: true, url: launch.url, start: '2026-11-12T08:00:00Z', end: '2026-11-13T08:00:00Z' })
+    const during = Date.parse('2026-11-12T10:00:00-08:00')
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new Error('denied') },
+      setItem: () => { throw new Error('denied') },
+    })
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() })
+    expect(launchNoticeHoldsCorner(later, during)).toBe(true)
+    markPhaseDismissed(later, 'live')
+    expect(launchNoticeHoldsCorner(later, during)).toBe(false)
+    expect(isPhaseDismissed(later, 'upcoming')).toBe(false)
   })
 })

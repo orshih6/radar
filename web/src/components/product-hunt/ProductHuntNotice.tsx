@@ -43,8 +43,6 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
   const { data: versionInfo, isPending: versionPending } = useVersionCheck()
   const [now, setNow] = useState(() => Date.now())
   const [ready, setReady] = useState(false)
-  // Covers a dismissal when localStorage is unavailable.
-  const [dismissedHere, setDismissedHere] = useState<LaunchPhase[]>([])
 
   const [usagePromptShowing, setUsagePromptShowing] = useState(usagePromptOnScreen)
   const launch = resolveLaunch(versionInfo?.productHuntLaunch)
@@ -69,7 +67,7 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
   const show = shouldShowLaunchNotice({
     phase,
     deploymentMode: capabilities ? (capabilities.deployment?.mode ?? 'local') : undefined,
-    dismissed: phase !== null && (dismissedHere.includes(phase) || isPhaseDismissed(launch, phase)),
+    dismissed: phase !== null && isPhaseDismissed(launch, phase),
     // Waits for the version check, which says whether the launch is still on.
     ready: ready && !versionPending,
     // A card already on screen keeps the corner, whatever the day.
@@ -78,12 +76,18 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
     )),
   })
   const { shouldRender, isOpen } = useAnimatedUnmount(show, overlayExitMs('menu'))
-  if (!shouldRender) return null
+  // What the card last showed, kept through the exit fade: the day can end, or
+  // the launch be called off, while it is on screen.
+  const [shown, setShown] = useState<{ phase: LaunchPhase; launch: ProductHuntLaunch } | null>(null)
+  if (show && phase !== null && (shown?.phase !== phase || shown.launch.url !== launch.url || shown.launch.start !== launch.start)) {
+    setShown({ phase, launch })
+  }
+  if (!shouldRender || !shown) return null
 
   const dismiss = () => {
-    if (phase === null) return
-    markPhaseDismissed(launch, phase)
-    setDismissedHere((d) => [...d, phase])
+    markPhaseDismissed(shown.launch, shown.phase)
+    // Re-render: the dismissal lives outside React state.
+    setNow(Date.now())
   }
 
   return (
@@ -116,22 +120,22 @@ export function ProductHuntNotice({ usageData, usageDataPending }: { usageData: 
             Radar <Heart className="w-3.5 h-3.5 fill-current text-red-500 dark:text-red-400" aria-label="loves" /> Agents
           </p>
           <p className="text-xs font-medium text-accent-text mt-0.5">
-            {phase === 'live' ? 'Live on Product Hunt today' : `Launching on Product Hunt ${launchDayLabel(launch)}`}
+            {shown.phase === 'live' ? 'Live on Product Hunt today' : `Launching on Product Hunt ${launchDayLabel(shown.launch)}`}
           </p>
           <p className="text-xs text-theme-text-secondary mt-1.5">
-            {phase === 'live'
+            {shown.phase === 'live'
               ? "We're on Product Hunt today with Radar's newly upgraded MCP server and AI investigations. If Radar has made Kubernetes a little easier for you, a comment on the launch would mean a lot. It helps other engineers find Radar."
               : "We're launching Radar's newly upgraded MCP server and AI investigations on Product Hunt. We'd love to see you there."}
           </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
             <a
-              href={launchLink(launch)}
+              href={launchLink(shown.launch)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={dismiss}
               className="text-xs font-semibold text-accent-text hover:underline whitespace-nowrap"
             >
-              {phase === 'live' ? 'Comment on Product Hunt →' : 'Follow on Product Hunt →'}
+              {shown.phase === 'live' ? 'Comment on Product Hunt →' : 'Follow on Product Hunt →'}
             </a>
             <a
               href={FEATURE_URL}

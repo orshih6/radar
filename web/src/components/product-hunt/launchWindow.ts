@@ -37,19 +37,26 @@ function dismissedKey(launch: ProductHuntLaunch, phase: LaunchPhase): string {
   return `radar-product-hunt-dismissed-${new Date(launch.start).toISOString().slice(0, 10)}-${phase}`
 }
 
+// Covers this page when localStorage is unavailable.
+const dismissedThisPage = new Set<string>()
+
 export function isPhaseDismissed(launch: ProductHuntLaunch, phase: LaunchPhase): boolean {
+  const key = dismissedKey(launch, phase)
+  if (dismissedThisPage.has(key)) return true
   try {
-    return localStorage.getItem(dismissedKey(launch, phase)) !== null
+    return localStorage.getItem(key) !== null
   } catch {
     return false
   }
 }
 
 export function markPhaseDismissed(launch: ProductHuntLaunch, phase: LaunchPhase): void {
+  const key = dismissedKey(launch, phase)
+  dismissedThisPage.add(key)
   try {
-    localStorage.setItem(dismissedKey(launch, phase), '1')
+    localStorage.setItem(key, '1')
   } catch {
-    // localStorage unavailable: the notice keeps this dismissal in memory
+    // localStorage unavailable: dismissedThisPage keeps it for this page
   }
   window.dispatchEvent(new Event(LAUNCH_NOTICE_DISMISSED_EVENT))
 }

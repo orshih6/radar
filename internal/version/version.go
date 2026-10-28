@@ -68,7 +68,7 @@ type UpdateInfo struct {
 	InstallMethod  InstallMethod `json:"installMethod"`
 	UpdateCommand  string        `json:"updateCommand,omitempty"`
 	Error          string        `json:"error,omitempty"`
-	// Set by the version-check handler, not by the lookup.
+	// Added by WithProductHuntLaunch, not by the lookup.
 	ProductHuntLaunch *launchday.Launch `json:"productHuntLaunch,omitempty"`
 }
 
@@ -84,6 +84,16 @@ type githubRelease struct {
 type checkOptions struct {
 	source string
 	manual bool
+}
+
+// WithProductHuntLaunch returns a copy of info carrying the effective Product
+// Hunt launch, for any update result the UI reads. A copy, because a lookup can
+// hand back the cached result itself.
+func WithProductHuntLaunch(info *UpdateInfo) *UpdateInfo {
+	out := *info
+	launch := launchday.Current()
+	out.ProductHuntLaunch = &launch
+	return &out
 }
 
 // SetCurrent sets the current version (called from main)

@@ -53,7 +53,6 @@ import (
 	"github.com/skyhook-io/radar/internal/images"
 	"github.com/skyhook-io/radar/internal/investigationrefs"
 	"github.com/skyhook-io/radar/internal/k8s"
-	"github.com/skyhook-io/radar/internal/launchday"
 	"github.com/skyhook-io/radar/internal/opencost"
 	prometheuspkg "github.com/skyhook-io/radar/internal/prometheus"
 	"github.com/skyhook-io/radar/internal/readscope"
@@ -1449,9 +1448,7 @@ func (s *Server) handleVersionCheck(w http.ResponseWriter, r *http.Request) {
 	} else {
 		info = version.CheckForUpdate(r.Context())
 	}
-	launch := launchday.Current()
-	info.ProductHuntLaunch = &launch
-	s.writeJSON(w, info)
+	s.writeJSON(w, version.WithProductHuntLaunch(info))
 }
 
 func (s *Server) handleClusterInfo(w http.ResponseWriter, r *http.Request) {
