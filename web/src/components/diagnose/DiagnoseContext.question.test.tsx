@@ -57,9 +57,13 @@ let root: Root;
 let diagnose: ReturnType<typeof useDiagnose>;
 let layout: ReturnType<typeof useDiagnoseLayout>;
 
+function capture(seenDiagnose: typeof diagnose, seenLayout: typeof layout) {
+  diagnose = seenDiagnose;
+  layout = seenLayout;
+}
+
 function Probe() {
-  diagnose = useDiagnose();
-  layout = useDiagnoseLayout();
+  capture(useDiagnose(), useDiagnoseLayout());
   return null;
 }
 

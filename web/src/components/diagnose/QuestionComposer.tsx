@@ -32,6 +32,7 @@ import {
   type QuestionSuggestion,
 } from "./questionSuggestions";
 import { ResourcePicker } from "./ResourcePicker";
+import { Tooltip } from "../ui/Tooltip";
 import { formatInvestigationTarget } from "./target";
 
 export const LOOK_BACKS = ["15m", "1h", "6h", "24h"] as const;
@@ -195,7 +196,7 @@ export function QuestionComposer({
     setLookBack(questionDraft.lookBack ?? DEFAULT_LOOK_BACK);
     setPickerOpen(!!questionDraft.pickResource);
     if (!questionDraft.pickResource) focusText();
-  }, [questionDraft]);
+  }, [questionDraft, currentContext]);
 
   // A hand-off that mounts this composer (the Omnibar row, Ask about a
   // resource, Back to your question) lands in the box, ready for Enter.
@@ -307,17 +308,15 @@ export function QuestionComposer({
             <>
               <span className="text-xs text-theme-text-tertiary">Start in</span>
               {startIn.length === 0 ? (
-                <span
-                  className={chipClass}
-                  title={
-                    tooMany
-                      ? `${picked.length} namespaces are selected; investigations start across the cluster past ${MAX_START_NAMESPACES}.`
-                      : undefined
-                  }
+                <Tooltip
+                  disabled={!tooMany}
+                  content={`${picked.length} namespaces are selected; investigations start across the cluster past ${MAX_START_NAMESPACES}.`}
                 >
-                  All namespaces
-                  {tooMany ? ` (${picked.length} selected)` : ""}
-                </span>
+                  <span className={chipClass}>
+                    All namespaces
+                    {tooMany ? ` (${picked.length} selected)` : ""}
+                  </span>
+                </Tooltip>
               ) : (
                 startIn.map((ns) => (
                   <span key={ns} className={chipClass}>

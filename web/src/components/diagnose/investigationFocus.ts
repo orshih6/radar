@@ -64,7 +64,12 @@ export function focusFromCase(
     if (focus.length >= max) continue;
     focus.push({ ...resource, exact: !!bound });
   }
-  return focus.map(({ exact: _exact, ...resource }) => resource);
+  return focus.map(({ kind, group, namespace, name }) => ({
+    kind,
+    group,
+    namespace,
+    name,
+  }));
 }
 
 function sameResource(
