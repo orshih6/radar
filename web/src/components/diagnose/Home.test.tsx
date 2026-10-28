@@ -409,3 +409,20 @@ describe("RecentList findings", () => {
     expect(text).not.toContain("Started with");
   });
 });
+
+describe("RecentList beside the question composer", () => {
+  it("does not send people to a resource to start", () => {
+    const text = visible(
+      renderToStaticMarkup(
+        <RecentList
+          agentLabel="Codex"
+          runs={[]}
+          onSelect={() => {}}
+          questions
+        />,
+      ),
+    );
+    expect(text).toContain("No investigations yet");
+    expect(text).not.toContain("Open a resource");
+  });
+});

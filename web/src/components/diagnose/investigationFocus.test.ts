@@ -54,6 +54,27 @@ describe("focusFromCase", () => {
     ]);
   });
 
+  it("spells an agent's lowercase kind the Kubernetes way", () => {
+    expect(
+      focusFromCase(
+        resolution([
+          item("cause", "diagnose", {
+            kind: "deployment",
+            namespace: "gl-missing-cm",
+            name: "checkout",
+          }),
+        ]),
+      ),
+    ).toEqual([
+      {
+        kind: "Deployment",
+        group: "",
+        namespace: "gl-missing-cm",
+        name: "checkout",
+      },
+    ]);
+  });
+
   it("ignores broad reads, context, failed reads and repeats", () => {
     const focus = focusFromCase(
       resolution([

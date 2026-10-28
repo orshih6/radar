@@ -44,6 +44,18 @@ describe("suggestionsFromIssues", () => {
     expect(shared?.question).toContain("on 2 resources in web");
   });
 
+  it("offers different kinds of problem before more of the same", () => {
+    const suggestions = suggestionsFromIssues(
+      [
+        issue({ category: "crashloop", namespace: "a", name: "a" }),
+        issue({ category: "crashloop", namespace: "b", name: "b" }),
+        issue({ category: "image_pull_failed", namespace: "c", name: "c" }),
+      ],
+      2,
+    );
+    expect(suggestions.map((s) => s.pin?.name)).toEqual(["a", "c"]);
+  });
+
   it("puts the most severe problem first and stops at the cap", () => {
     const suggestions = suggestionsFromIssues(
       [

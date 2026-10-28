@@ -945,6 +945,7 @@ export function DiagnoseSurface({
               loaded={d.runsLoaded}
               loadFailed={d.runsLoadFailed}
               onRetry={d.refreshRuns}
+              questions={d.questions}
             />
           </aside>
         )}

@@ -1,4 +1,4 @@
-import { knownKindForPluralWithGroup } from "../../utils/navigation";
+import { kindToPluralWithGroup, pluralToKind } from "../../utils/navigation";
 import type { InvestigationCaseResolution } from "./investigationCase";
 import { investigationSourceArgs } from "./investigationEvidence/identity";
 import { runTargetKey, type InvestigationTargetIdentity } from "./target";
@@ -44,7 +44,9 @@ export function focusFromCase(
     if (!name || !rawKind) continue;
     const group = typeof args?.group === "string" ? args.group : "";
     const resource = {
-      kind: knownKindForPluralWithGroup(rawKind, group) ?? rawKind,
+      // Agents spell kinds every way kubectl accepts: deployment, deployments,
+      // Deployment. The server canonicalizes the group when a run starts.
+      kind: pluralToKind(kindToPluralWithGroup(rawKind, group)),
       group,
       namespace: typeof args?.namespace === "string" ? args.namespace : "",
       name,

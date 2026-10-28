@@ -6,9 +6,16 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowRight, AtSign, Plus, X } from "lucide-react";
 import { Collapse } from "@skyhook-io/k8s-ui";
 
-import { useIssues, useNamespaceScope, useSearch } from "../../api/client";
+import {
+  useIssues,
+  useNamespaceScope,
+  useResourceIssues,
+  useSearch,
+} from "../../api/client";
+import { kindToPluralWithGroup } from "../../utils/navigation";
 import { useDiagnose } from "./DiagnoseContext";
 import {
+  suggestionsForPin,
   suggestionsFromIssues,
   type QuestionPin,
   type QuestionSuggestion,
@@ -39,10 +46,22 @@ export function QuestionComposer({
   const [namespaces, setNamespaces] = useState<string[] | null>(null);
   const startIn = namespaces ?? scope?.actives ?? [];
 
-  const { data: issuesData } = useIssues(startIn);
+  // Suggestions follow what the question is about: the pinned resource's
+  // own issues, or the issues where the namespaces say to start.
+  const { data: issuesData } = useIssues(startIn, !pin);
+  const { data: pinIssues } = useResourceIssues(
+    pin ? kindToPluralWithGroup(pin.kind, pin.group) : "",
+    pin?.group || undefined,
+    pin?.namespace ?? "",
+    pin?.name ?? "",
+    !!pin,
+  );
   const suggestions = useMemo(
-    () => suggestionsFromIssues(issuesData?.issues ?? []),
-    [issuesData],
+    () =>
+      pin
+        ? suggestionsForPin(pinIssues ?? [], pin)
+        : suggestionsFromIssues(issuesData?.issues ?? []),
+    [pin, pinIssues, issuesData],
   );
 
   useEffect(() => {
@@ -173,7 +192,7 @@ export function QuestionComposer({
                     setNamespaces([...startIn, event.target.value])
                   }
                   aria-label="Add a namespace to start in"
-                  className="rounded-md border border-theme-border bg-theme-elevated px-1.5 py-0.5 text-xs text-theme-text-secondary"
+                  className="w-28 rounded-md border border-theme-border bg-theme-elevated px-1.5 py-0.5 text-xs text-theme-text-secondary"
                 >
                   <option value="">+ namespace</option>
                   {addable.map((ns) => (

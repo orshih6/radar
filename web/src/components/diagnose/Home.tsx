@@ -190,6 +190,7 @@ export function RecentList({
   loaded = true,
   loadFailed = false,
   onRetry,
+  questions = false,
 }: {
   agentLabel: string;
   runs: RunSummary[];
@@ -203,6 +204,8 @@ export function RecentList({
   /** The latest list request failed. */
   loadFailed?: boolean;
   onRetry?: () => void;
+  /** Home offers the question composer beside this list. */
+  questions?: boolean;
 }) {
   const now = new Date();
   const contexts = new Map(
@@ -303,16 +306,22 @@ export function RecentList({
           <div className="text-sm font-medium text-theme-text-primary">
             No investigations yet
           </div>
-          <p className="mt-1 max-w-xs text-sm text-theme-text-tertiary">
-            Open a resource and use its{" "}
-            <Sparkles className="inline h-3.5 w-3.5 align-text-bottom text-accent" />{" "}
-            action to investigate it with {agentLabel} —{" "}
-            <span className="font-medium text-theme-text-secondary">
-              Investigate
-            </span>{" "}
-            a problem, or just ask about it. Investigations run in the
-            background and are kept in your history here.
-          </p>
+          {questions ? (
+            <p className="mt-1 max-w-xs text-sm text-theme-text-tertiary">
+              Investigations run in the background and are kept here.
+            </p>
+          ) : (
+            <p className="mt-1 max-w-xs text-sm text-theme-text-tertiary">
+              Open a resource and use its{" "}
+              <Sparkles className="inline h-3.5 w-3.5 align-text-bottom text-accent" />{" "}
+              action to investigate it with {agentLabel} —{" "}
+              <span className="font-medium text-theme-text-secondary">
+                Investigate
+              </span>{" "}
+              a problem, or just ask about it. Investigations run in the
+              background and are kept in your history here.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -373,7 +382,9 @@ export function RecentList({
                         : readableKind
                     }`;
                 const askedAbout = questionOnly ? "" : (r.question ?? "");
-                const initialIssue = questionOnly
+                // The engineer's question frames a run better than the issue
+                // Radar flagged when it started, so a run shows one or the other.
+                const initialIssue = r.question
                   ? undefined
                   : r.health?.topReason?.trim();
                 const found = previewText(r.preview);

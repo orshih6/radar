@@ -35,8 +35,21 @@ export function suggestionsFromIssues(
     if (members) members.push(issue);
     else groups.set(key, [issue]);
   }
+  // One kind of problem per suggestion first, so three namespaces with the
+  // same symptom don't crowd out a different one; then fill by severity.
+  const seen = new Set<string>();
+  const firstOfKind: [string, Issue[]][] = [];
+  const rest: [string, Issue[]][] = [];
+  for (const entry of groups) {
+    const category = entry[1][0].category;
+    if (seen.has(category)) rest.push(entry);
+    else {
+      seen.add(category);
+      firstOfKind.push(entry);
+    }
+  }
   const suggestions: QuestionSuggestion[] = [];
-  for (const [key, members] of groups) {
+  for (const [key, members] of [...firstOfKind, ...rest]) {
     if (suggestions.length >= max) break;
     const first = members[0];
     const title = issueTitle(first);
@@ -63,6 +76,43 @@ export function suggestionsFromIssues(
       key,
       question: `What's causing “${title}” on ${members.length} resources ${where}?`,
       namespaces,
+    });
+  }
+  return suggestions;
+}
+
+// Questions about a pinned resource, from the issues Radar reports for it
+// (its own, and ones on related objects that name it). The resource stays
+// pinned; the question names the problem, and the object it is on when that
+// is not the pinned resource.
+export function suggestionsForPin(
+  issues: readonly Issue[],
+  pin: QuestionPin,
+  max = 3,
+): QuestionSuggestion[] {
+  const pinned = formatInvestigationTarget(pin);
+  const seen = new Set<string>();
+  const suggestions: QuestionSuggestion[] = [];
+  for (const issue of [...issues].sort(compareIssues)) {
+    if (suggestions.length >= max) break;
+    const title = issueTitle(issue);
+    const on = formatInvestigationTarget({
+      kind: issue.kind,
+      group: issue.group ?? "",
+      namespace: issue.namespace ?? "",
+      name: issue.name,
+    });
+    const key = `${title}\u0000${on}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    suggestions.push({
+      key,
+      question:
+        on === pinned
+          ? `What's causing “${title}”?`
+          : `What's causing “${title}” on ${on}?`,
+      namespaces: [],
+      pin,
     });
   }
   return suggestions;

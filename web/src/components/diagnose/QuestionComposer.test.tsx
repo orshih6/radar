@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   },
   actives: ["shop"],
   issues: [] as unknown[],
+  pinIssues: [] as unknown[],
 }));
 
 vi.mock("./DiagnoseContext", () => ({
@@ -28,6 +29,7 @@ vi.mock("../../api/client", () => ({
     data: { actives: state.actives, accessibleNamespaces: ["shop", "web"] },
   }),
   useIssues: () => ({ data: { issues: state.issues } }),
+  useResourceIssues: () => ({ data: state.pinIssues }),
   useSearch: () => ({ data: { hits: [] }, isFetching: false }),
 }));
 
@@ -38,6 +40,7 @@ beforeEach(() => {
   state.openInvestigation.mockReset();
   state.questionDraft = null;
   state.issues = [];
+  state.pinIssues = [];
   const element = document.createElement("div");
   document.body.appendChild(element);
   root = createRoot(element);
@@ -152,5 +155,51 @@ describe("QuestionComposer", () => {
     ];
     await render();
     expect(document.body.textContent).toContain("From what Radar sees now");
+  });
+
+  it("suggests from the pinned resource's own issues", async () => {
+    state.questionDraft = {
+      seq: 1,
+      pin: {
+        kind: "Deployment",
+        group: "apps",
+        namespace: "shop",
+        name: "api",
+      },
+    };
+    state.issues = [
+      {
+        id: "elsewhere",
+        severity: "critical",
+        source: "problem",
+        category: "crashloop",
+        category_group: "runtime",
+        grouping_scope: "workload",
+        kind: "Deployment",
+        group: "apps",
+        namespace: "other",
+        name: "x",
+        reason: "CrashLoopBackOff",
+      },
+    ];
+    state.pinIssues = [
+      {
+        id: "np",
+        severity: "warning",
+        source: "problem",
+        category: "network_policy_denies",
+        category_group: "networking",
+        grouping_scope: "workload",
+        kind: "NetworkPolicy",
+        group: "networking.k8s.io",
+        namespace: "shop",
+        name: "deny-all",
+        reason: "DenyAll",
+      },
+    ];
+    await render();
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("on NetworkPolicy shop/deny-all?");
+    expect(text).not.toContain("other/x");
   });
 });
