@@ -26,8 +26,12 @@ export const LOOK_BACKS = ["15m", "1h", "6h", "24h"] as const;
 const DEFAULT_LOOK_BACK = "1h";
 const MAX_START_NAMESPACES = 20;
 
+// Chips state what the question carries; actions change it. They must not
+// look alike, or a scope chip reads as a menu and an action as a value.
 const chipClass =
   "inline-flex max-w-full items-center gap-1 rounded-md border border-theme-border bg-theme-elevated px-2 py-0.5 text-xs text-theme-text-secondary";
+const actionClass =
+  "inline-flex items-center gap-1 rounded-md border border-dashed border-theme-border px-2 py-0.5 text-xs text-theme-text-tertiary hover:border-theme-text-tertiary hover:text-theme-text-primary";
 
 export function QuestionComposer({
   onBrowseIssues,
@@ -264,7 +268,7 @@ export function QuestionComposer({
                     setNamespaces([...startIn, event.target.value])
                   }
                   aria-label="Add a namespace to start in"
-                  className="w-28 rounded-md border border-theme-border bg-theme-elevated px-1.5 py-0.5 text-xs text-theme-text-secondary"
+                  className="w-28 cursor-pointer rounded-md border border-dashed border-theme-border bg-transparent px-1.5 py-0.5 text-xs text-theme-text-tertiary hover:border-theme-text-tertiary hover:text-theme-text-primary"
                 >
                   <option value="">+ namespace</option>
                   {addable.map((ns) => (
@@ -278,7 +282,7 @@ export function QuestionComposer({
                 type="button"
                 onClick={() => setPickerOpen((open) => !open)}
                 aria-expanded={pickerOpen}
-                className={`${chipClass} hover:bg-theme-hover hover:text-theme-text-primary`}
+                className={actionClass}
               >
                 <AtSign className="h-3 w-3" />
                 Pin a resource
@@ -371,6 +375,23 @@ export function QuestionComposer({
   );
 }
 
+// Kinds that are usually children of what an engineer means: a question is
+// about the Deployment or Service, not one of its ReplicaSets or Pods. They
+// stay pickable, after everything else.
+const OWNED_KINDS = new Set([
+  "Pod",
+  "ReplicaSet",
+  "ControllerRevision",
+  "EndpointSlice",
+  "Event",
+]);
+
+function rankForPinning<T extends { kind: string }>(hits: T[]): T[] {
+  return [...hits].sort(
+    (a, b) => Number(OWNED_KINDS.has(a.kind)) - Number(OWNED_KINDS.has(b.kind)),
+  );
+}
+
 function ResourcePicker({
   inputRef,
   onPick,
@@ -390,8 +411,13 @@ function ResourcePicker({
   });
   // Results kept from the previous query while the next one loads must not
   // be pinnable: Enter would pin what the engineer just typed away from.
-  const hits =
-    query.trim().length >= 2 && !isPlaceholderData ? (data?.hits ?? []) : [];
+  const hits = useMemo(
+    () =>
+      query.trim().length >= 2 && !isPlaceholderData
+        ? rankForPinning(data?.hits ?? [])
+        : [],
+    [query, isPlaceholderData, data],
+  );
   const activeIndex = Math.min(active, Math.max(hits.length - 1, 0));
   const pick = (hit: (typeof hits)[number]) =>
     onPick({

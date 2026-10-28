@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  canonicalKind,
   formatInvestigationTarget,
   formatInvestigationTitle,
   formatQuestionScope,
@@ -171,5 +172,14 @@ describe("questionAskedAt", () => {
     expect(
       questionAskedAt({ ...run, question: undefined }, now),
     ).toBeUndefined();
+  });
+});
+
+describe("canonicalKind", () => {
+  it("names a resource by its Kind however the caller spelled it", () => {
+    expect(canonicalKind("deployments", "")).toBe("Deployment");
+    expect(canonicalKind("deployment", "apps")).toBe("Deployment");
+    expect(canonicalKind("Deployment", "apps")).toBe("Deployment");
+    expect(canonicalKind("pods", "")).toBe("Pod");
   });
 });

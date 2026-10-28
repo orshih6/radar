@@ -4,7 +4,7 @@ import {
   useDiagnose,
   useDiagnoseLayout,
 } from "./DiagnoseContext";
-import { runTargetKey } from "./target";
+import { canonicalKind, runTargetKey } from "./target";
 import { Tooltip } from "../ui/Tooltip";
 import type { RenderDiagnoseAction } from "../../context/DiagnoseCustomization";
 
@@ -68,7 +68,10 @@ function DiagnoseResourceButton({
           if (!ready) d.openHome();
           // Asking about a resource with no live problem means saying what
           // to ask; a problem, or a run already live, opens straight away.
-          else if (asks) d.openQuestion({ pin: target });
+          else if (asks)
+            d.openQuestion({
+              pin: { ...target, kind: canonicalKind(kind, group ?? "") },
+            });
           else d.openInvestigation(target);
         }}
         aria-label={

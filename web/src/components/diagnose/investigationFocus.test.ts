@@ -100,6 +100,57 @@ describe("focusFromCase", () => {
     ]);
   });
 
+  it("lists a resource once when a read omitted the group the bound object has", () => {
+    const read = item("cause", "diagnose", {
+      kind: "deployment",
+      namespace: "shop",
+      name: "api",
+    });
+    const bound = item("cause", "get_resource", { kind: "deployments" });
+    bound.observation = {
+      data: {
+        type: "resource",
+        resource: {
+          apiVersion: "apps/v1",
+          kind: "Deployment",
+          metadata: { namespace: "shop", name: "api" },
+        },
+        warnings: [],
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([read, bound]))).toEqual([
+      { kind: "Deployment", group: "apps", namespace: "shop", name: "api" },
+    ]);
+  });
+
+  it("keeps same-named resources of different exact groups apart", () => {
+    const core = item("cause", "get_resource", {});
+    core.observation = {
+      data: {
+        type: "resource",
+        resource: {
+          apiVersion: "v1",
+          kind: "Service",
+          metadata: { namespace: "shop", name: "api" },
+        },
+        warnings: [],
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    const knative = item("symptom", "get_resource", {});
+    knative.observation = {
+      data: {
+        type: "resource",
+        resource: {
+          apiVersion: "serving.knative.dev/v1",
+          kind: "Service",
+          metadata: { namespace: "shop", name: "api" },
+        },
+        warnings: [],
+      },
+    } as unknown as InvestigationCaseItem["observation"];
+    expect(focusFromCase(resolution([core, knative]))).toHaveLength(2);
+  });
+
   it("keeps the exact kind Radar recorded", () => {
     const cause = item("cause", "get_resource", { kind: "podmetrics" });
     cause.observation = {

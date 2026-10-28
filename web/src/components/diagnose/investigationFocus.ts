@@ -1,4 +1,3 @@
-import { kindToPluralWithGroup, pluralToKind } from "../../utils/navigation";
 import type {
   InvestigationCaseItem,
   InvestigationCaseResolution,
@@ -7,7 +6,11 @@ import {
   investigationEvidenceSubjectRef,
   investigationSourceArgs,
 } from "./investigationEvidence/identity";
-import { runTargetKey, type InvestigationTargetIdentity } from "./target";
+import {
+  canonicalKind,
+  runTargetKey,
+  type InvestigationTargetIdentity,
+} from "./target";
 
 // Reads that are about exactly the resource their arguments name. A broad
 // read (a search, a namespace listing) proves nothing about which resource
@@ -33,23 +36,40 @@ export function focusFromCase(
   const items = investigationCase.items
     .filter((item) => item.role === "cause" || item.role === "symptom")
     .sort((a, b) => Number(b.role === "cause") - Number(a.role === "cause"));
-  const seen = new Set<string>();
-  const focus: InvestigationTargetIdentity[] = [];
+  const focus: (InvestigationTargetIdentity & { exact: boolean })[] = [];
   for (const item of items) {
-    const resource = boundResource(item) ?? readResource(item);
+    const bound = boundResource(item);
+    const resource = bound ?? readResource(item);
     if (!resource) continue;
-    const key = runTargetKey(
-      resource.kind,
-      resource.namespace,
-      resource.name,
-      resource.group,
+    // A read's arguments often leave out a built-in group the bound object
+    // carries (deployment vs apps/Deployment): the same resource either way,
+    // named by the exact identity whichever arrives first.
+    const same = focus.findIndex(
+      (seen) =>
+        sameResource(seen, resource) &&
+        (seen.group === resource.group ||
+          (!seen.exact && !seen.group) ||
+          (!bound && !resource.group)),
     );
-    if (seen.has(key)) continue;
-    seen.add(key);
-    focus.push(resource);
-    if (focus.length >= max) break;
+    if (same >= 0) {
+      if (bound && !focus[same].exact) focus[same] = { ...bound, exact: true };
+      continue;
+    }
+    if (focus.length >= max) continue;
+    focus.push({ ...resource, exact: !!bound });
   }
-  return focus;
+  return focus.map(({ exact: _exact, ...resource }) => resource);
+}
+
+function sameResource(
+  a: InvestigationTargetIdentity,
+  b: InvestigationTargetIdentity,
+): boolean {
+  return (
+    a.namespace === b.namespace &&
+    a.name === b.name &&
+    runTargetKey(a.kind, "", "", "") === runTargetKey(b.kind, "", "", "")
+  );
 }
 
 // What the citation bound to, exactly as Radar recorded it.
@@ -87,7 +107,7 @@ function readResource(
   // Agents spell kinds every way kubectl accepts: deployment, deployments,
   // Deployment. The server canonicalizes the group when a run starts.
   return {
-    kind: pluralToKind(kindToPluralWithGroup(kind, group)),
+    kind: canonicalKind(kind, group),
     group,
     namespace: typeof args?.namespace === "string" ? args.namespace : "",
     name,

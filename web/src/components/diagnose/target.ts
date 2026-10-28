@@ -4,6 +4,7 @@ import { groupQualifiesLaneId } from "@skyhook-io/k8s-ui/utils/navigation";
 import {
   kindToPluralWithGroup,
   knownKindForPluralWithGroup,
+  pluralToKind,
 } from "../../utils/navigation";
 
 export interface InvestigationTargetIdentity {
@@ -112,4 +113,11 @@ export function rerunOpening(
     lookBack: run.lookBack,
     askedAt: questionAskedAt(run, now),
   };
+}
+
+// Callers name kinds every way Kubernetes accepts: a route's plural
+// (deployments), an agent's lowercase singular (deployment), or the Kind.
+// A resource someone will read about is named by its Kind.
+export function canonicalKind(kind: string, group: string): string {
+  return pluralToKind(kindToPluralWithGroup(kind, group));
 }
