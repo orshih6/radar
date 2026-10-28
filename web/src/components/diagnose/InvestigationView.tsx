@@ -1621,6 +1621,7 @@ export function InvestigationView({
     return {
       context: {
         target: formatInvestigationTitle(run),
+        asked: isQuestionOnly(run) ? undefined : run.question,
         cluster: run.context,
         startedAt: run.createdAt,
         agent: agentLabel,
