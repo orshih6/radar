@@ -439,13 +439,18 @@ assert_not_contains 'name: radar-cluster-read$'                 "no cluster-read
 assert_not_contains 'name: radar-cloud-viewer-cluster-read$'    "no tier bindings outside cloud mode"
 echo
 
-render "integration writes default to auto: stock admin owner gets Argo CD actions" $CLOUD
+render "integration writes are off by default: the stock admin owner gets no Argo CD actions" $CLOUD
+assert_not_contains 'name: radar-integration-write$'                 "no write role by default"
+assert_not_contains 'name: radar-cloud-owner-integration-write$'     "no owner write binding by default"
+echo
+
+render "auto with the stock admin owner grants Argo CD actions" $CLOUD --set cloud.defaultRbac.integrationWrite.gitops.owner=auto
 assert_contains 'name: radar-integration-write$'                     "write role rendered"
 assert_contains 'name: radar-cloud-owner-integration-write$'         "owner-only write binding rendered"
 assert_not_contains 'name: radar-cloud-member-integration-write$'    "no member write binding"
 echo
 
-render "auto with a custom owner role grants no integration writes" $CLOUD --set cloud.defaultRbac.ownerClusterRole=platform-owner
+render "auto with a custom owner role grants no integration writes" $CLOUD --set cloud.defaultRbac.ownerClusterRole=platform-owner --set cloud.defaultRbac.integrationWrite.gitops.owner=auto
 assert_not_contains 'name: radar-integration-write$'                 "custom owner role stays off under auto"
 echo
 
@@ -453,8 +458,8 @@ render "explicit true with a custom owner role grants integration writes" $CLOUD
 assert_contains 'name: radar-integration-write$'                     "explicit opt-in renders the role"
 echo
 
-render "legacy values (integrationWrite absent) follow auto" $CLOUD --set cloud.defaultRbac.integrationWrite=null
-assert_contains 'name: radar-integration-write$'                     "absent map treated as auto"
+render "legacy values (integrationWrite absent) follow the default: off" $CLOUD --set cloud.defaultRbac.integrationWrite=null
+assert_not_contains 'name: radar-integration-write$'                 "absent map stays off"
 echo
 
 render "string false must not enable integration writes" $CLOUD --set-string cloud.defaultRbac.integrationWrite.gitops.owner=false --skip-schema-validation
