@@ -1212,9 +1212,16 @@ function RoutedDiagnoseProvider({
     recordConsent(consentSurface)
       .then(() => {
         setConsented((prev) => ({ ...prev, [consentSurface]: true }));
-        // Cancelled while the acknowledgment was in flight: consent is
-        // recorded, but the start the engineer walked away from never runs.
+        // Cancelled while the acknowledgment was in flight, or the cluster
+        // changed under it: consent is recorded, but the start never runs.
         if (approval !== consentApprovalRef.current) return;
+        if (
+          t?.context &&
+          currentContextRef.current &&
+          t.context !== currentContextRef.current
+        ) {
+          return;
+        }
         // Cleared only on success: a failed write keeps the consent card up
         // (needsConsent = !!pendingTarget) so "try again" works in place.
         setPendingTarget(null);
@@ -1245,11 +1252,14 @@ function RoutedDiagnoseProvider({
   }, [pendingTarget, giveQuestionBack]);
   const dismissError = useCallback(() => setStartFailure(null), []);
   useEffect(() => {
-    if (
-      pendingTarget?.context &&
-      currentContext &&
-      pendingTarget.context !== currentContext
-    ) {
+    if (!pendingTarget || !currentContext) return;
+    // A start opened before the cluster was known belongs to the first one
+    // known, so a later switch still drops it.
+    if (!pendingTarget.context) {
+      setPendingTarget({ ...pendingTarget, context: currentContext });
+      return;
+    }
+    if (pendingTarget.context !== currentContext) {
       consentApprovalRef.current++;
       giveQuestionBack(pendingTarget);
       setPendingTarget(null);

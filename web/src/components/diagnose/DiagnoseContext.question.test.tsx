@@ -44,10 +44,12 @@ vi.mock("../../api/diagnose", async (importOriginal) => ({
   recordConsent: api.recordConsent,
 }));
 
-const cluster = vi.hoisted(() => ({ name: "cluster-a" }));
+const cluster = vi.hoisted(() => ({ name: "cluster-a" as string | undefined }));
 vi.mock("../../api/client", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  useContexts: () => ({ data: [{ name: cluster.name, isCurrent: true }] }),
+  useContexts: () => ({
+    data: cluster.name ? [{ name: cluster.name, isCurrent: true }] : undefined,
+  }),
 }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -213,5 +215,27 @@ describe("starting from a question", () => {
       text: "checkout returns 502s",
       context: "cluster-a",
     });
+  });
+
+  it("protects a start opened before the cluster was known", async () => {
+    const rerender = () =>
+      act(async () =>
+        root.render(
+          <DiagnoseProvider browserURLState={false}>
+            <Probe />
+          </DiagnoseProvider>,
+        ),
+      );
+    cluster.name = undefined;
+    await rerender();
+    await act(async () => diagnose.openInvestigation(question));
+    expect(diagnose.needsConsent).toBe(true);
+    cluster.name = "cluster-a";
+    await rerender();
+    cluster.name = "cluster-b";
+    await rerender();
+    await flush();
+    expect(diagnose.needsConsent).toBe(false);
+    expect(diagnose.questionDraft?.context).toBe("cluster-a");
   });
 });
