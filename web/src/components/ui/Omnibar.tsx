@@ -430,6 +430,9 @@ export const Omnibar = forwardRef<OmnibarHandle, OmnibarProps>(function Omnibar(
       const row = rows[selectedIndex]
       if (row) {
         if (row.kind === 'resource' && resourcesStale) return
+        // Investigate sits first only until results land; an Enter before
+        // then is someone looking for a resource, not asking a question.
+        if (row.kind === 'investigate' && resourcesStale && !userMovedRef.current) return
         execute(row)
         return
       }
@@ -591,7 +594,8 @@ export const Omnibar = forwardRef<OmnibarHandle, OmnibarProps>(function Omnibar(
                 type="button"
                 data-selected={investigateRow.id === selectedId}
                 onMouseEnter={() => selectRow(investigateRow.id)}
-                onMouseDown={(e) => { e.preventDefault(); execute(investigateRow) }}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => execute(investigateRow)}
                 className={clsx('w-full flex items-center gap-2.5 px-3 py-1.5 mt-1 text-left border-t border-theme-border transition-colors', investigateRow.id === selectedId ? 'selection' : 'hover:bg-theme-elevated/40')}
               >
                 <Sparkles className="w-4 h-4 shrink-0 text-accent" />

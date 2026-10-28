@@ -52,7 +52,7 @@ describe('Omnibar investigate row', () => {
     typeQuery('checkout returns 502s')
     const row = investigateButton()
     expect(row?.textContent).toContain('Investigate “checkout returns 502s”')
-    act(() => { row!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    act(() => { row!.click() })
     expect(onInvestigate).toHaveBeenCalledWith({ text: 'checkout returns 502s', namespaces: [] })
   })
 
@@ -62,6 +62,18 @@ describe('Omnibar investigate row', () => {
     const rows = [...document.body.querySelectorAll('[data-selected]')]
     expect(rows.at(-1)?.textContent).toContain('Investigate “checkout”')
     expect(rows[0]?.textContent).not.toContain('Investigate')
+  })
+
+  it('waits for search results before Enter can ask', () => {
+    const onInvestigate = vi.fn()
+    act(() => {
+      root.render(<Omnibar onOpenResource={vi.fn()} commandItems={[]} searchData={{ hits: [] }} isFetching onInvestigateQuery={onInvestigate} />)
+    })
+    typeQuery('checkout')
+    act(() => {
+      host.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    })
+    expect(onInvestigate).not.toHaveBeenCalled()
   })
 
   it('is absent when the host has no question entry', () => {
@@ -77,7 +89,7 @@ describe('Omnibar investigate row', () => {
     })
     typeQuery('slow checkout')
     expect(investigateButton()?.textContent).toContain('as a question · in payments')
-    act(() => { investigateButton()!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    act(() => { investigateButton()!.click() })
     expect(onInvestigate).toHaveBeenCalledWith({ text: 'slow checkout', namespaces: ['payments'] })
   })
 })
