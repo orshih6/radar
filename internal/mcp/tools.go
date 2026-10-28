@@ -223,13 +223,13 @@ func registerTools(server *mcp.Server, includeWrites, includeExec bool, paramReg
 		Annotations: readOnly,
 	}, logToolCall("get_pod_logs", handleGetPodLogs))
 
-	diagnoseDescription := "Get a bounded, point-in-time evidence bundle for one narrowed workload, " +
-		"GitOps reconciler or network entry. Combines signals in one round-trip; " +
+	diagnoseDescription := "Get bounded evidence for a workload, OpenTelemetryCollector/Canary, " +
+		"GitOps reconciler or network entry in one call; " +
 		"it does not run an agent and is not an authoritative root-cause verdict or an exhaustive account. " +
 		"Use for CrashLoopBackOff, OOMKilled, image-pull, readiness, scheduling, GitOps sync/health, " +
 		"or traffic not reaching a service, route or ingress. Pod, Deployment, StatefulSet, DaemonSet and Argo Rollout " +
 		"bundle resource context, selected/capped current and previous logs, Warning events, startup blockers, " +
-		"related issues and recent workload/ConfigMap changes. " +
+		"related issues and recent workload/ConfigMap changes. OpenTelemetryCollector/Canary return root reconciliation and owned-workload bundles; Canary also includes its declared target. " +
 		"Warning events are a capped sample for the observed resource and Pods; UID-less evidence cannot prove an incarnation. Use get_events for a broader, dedicated event read, including history. " +
 		"`crashCause` is evidence, not a root-cause verdict. `logLineSelection` ranks " +
 		"`" + crashLineFatalPattern + "`, `" + crashLineHeaderOnly + "`, `" +
@@ -1337,6 +1337,10 @@ func buildMCPResourceContext(ctx context.Context, obj runtime.Object, kind, name
 }
 
 func buildMCPResourceContextWithStaleChecks(ctx context.Context, obj runtime.Object, kind, namespace, name string, tier resourcecontext.ContextTier, staleChecks []k8s.StaleSecretEnvCheck, issueSummary *resourcecontext.IssueSummary) *resourcecontext.ResourceContext {
+	return buildMCPResourceContextWithOperatorChildren(ctx, obj, kind, namespace, name, tier, staleChecks, issueSummary, nil)
+}
+
+func buildMCPResourceContextWithOperatorChildren(ctx context.Context, obj runtime.Object, kind, namespace, name string, tier resourcecontext.ContextTier, staleChecks []k8s.StaleSecretEnvCheck, issueSummary *resourcecontext.IssueSummary, children *k8s.OperatorChildren) *resourcecontext.ResourceContext {
 	if obj == nil {
 		return nil
 	}
@@ -1391,6 +1395,13 @@ func buildMCPResourceContextWithStaleChecks(ctx context.Context, obj runtime.Obj
 		opts.Topology = topo
 		opts.Provider = prov
 		opts.DynamicProv = dyn
+	}
+	if children == nil {
+		children = k8s.OperatorChildrenForObject(obj, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })
+	}
+	if children != nil {
+		opts.Children = children.Context
+		opts.ChildrenUnavailable = children.Unavailable != ""
 	}
 	opts.Ownership = func(rel *topology.Relationships, fetched ownership.Observation) {
 		k8s.AnswerOwner(rel, fetched, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })
