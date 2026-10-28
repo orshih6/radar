@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HPADiagnosisState } from "@skyhook-io/k8s-ui";
 import {
+  assessmentLimitLines,
   evidenceDisplaySnapshot,
   groupEvidenceCoverage,
 } from "./investigationEvidencePresentation";
@@ -446,11 +447,41 @@ describe("coverage presentation", () => {
       limitation("Container logs", "Connection timed out", "error"),
     ]);
     expect(groups[0].hasError).toBe(true);
-    expect(groups[0].bookkeepingOnly).toBe(false);
-    expect(groups[1].bookkeepingOnly).toBe(true);
     expect(groups[0].summary).toContain("Forbidden");
     expect(groups[0].summary).toContain("Connection timed out");
     expect(groups[0].limitations).toHaveLength(3);
+  });
+  it("splits assessment limits into open reads and routine bookkeeping per entry", () => {
+    const { open, routine } = assessmentLimitLines([
+      limitation("Container logs", "Logs sampled", "truncated"),
+      limitation("Container logs", "Forbidden: cannot read pod logs", "error"),
+      limitation(
+        "Cluster-scoped admission changes",
+        "Radar has watched MutatingWebhookConfigurations only since 2026-10-27T23:42:37Z; earlier changes in the window are unknown.",
+        "unknown",
+        true,
+      ),
+      limitation(
+        "Cluster-scoped admission changes",
+        "Radar failed to record a MutatingWebhookConfiguration change at 2026-10-28T00:00:00Z; changes in the window may be missing.",
+        "unknown",
+      ),
+      limitation(
+        "Recent changes",
+        "Secret object history incomplete",
+        "unknown",
+        true,
+      ),
+    ]);
+    expect(open).toEqual([
+      "Container logs: Forbidden: cannot read pod logs",
+      "Cluster-scoped admission changes: Radar failed to record a MutatingWebhookConfiguration change at 2026-10-28T00:00:00Z; changes in the window may be missing.",
+    ]);
+    expect(routine).toEqual([
+      "Container logs: Only part of the logs was checked.",
+      "Cluster-scoped admission changes: Radar has watched MutatingWebhookConfigurations only since 2026-10-27T23:42:37Z; earlier changes in the window are unknown.",
+      "Recent changes: Change history is incomplete.",
+    ]);
   });
   it("keeps history-only neutral and unknown limitations verbatim", () => {
     expect(
