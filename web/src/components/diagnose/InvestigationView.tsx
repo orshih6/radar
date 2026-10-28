@@ -2121,6 +2121,11 @@ export function InvestigationView({
                           turn={turn}
                           agentLabel={agentLabel}
                           turnIndex={index}
+                          openingQuestion={
+                            index === 0 && !turn.question
+                              ? run.question
+                              : undefined
+                          }
                           evidenceStepIds={evidenceStepIdsByTurn.get(index)}
                           onViewEvidence={viewEvidenceSource}
                           sourceRevealRequest={activityRevealRequest}
