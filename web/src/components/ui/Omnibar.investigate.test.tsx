@@ -76,6 +76,7 @@ describe('Omnibar investigate row', () => {
       root.render(<Omnibar onOpenResource={vi.fn()} commandItems={[]} searchData={{ hits: [] }} seedNamespaces={['payments']} onInvestigateQuery={onInvestigate} />)
     })
     typeQuery('slow checkout')
+    expect(investigateButton()?.textContent).toContain('as a question · in payments')
     act(() => { investigateButton()!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
     expect(onInvestigate).toHaveBeenCalledWith({ text: 'slow checkout', namespaces: ['payments'] })
   })

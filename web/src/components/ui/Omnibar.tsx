@@ -596,7 +596,9 @@ export const Omnibar = forwardRef<OmnibarHandle, OmnibarProps>(function Omnibar(
               >
                 <Sparkles className="w-4 h-4 shrink-0 text-accent" />
                 <span className="min-w-0 truncate text-sm text-theme-text-primary">Investigate “{investigateRow.text}”</span>
-                <span className="shrink-0 text-xs text-theme-text-tertiary">as a question</span>
+                <span className="min-w-0 truncate text-xs text-theme-text-tertiary">
+                  as a question{investigateRow.namespaces.length > 0 ? ` · in ${investigateRow.namespaces.join(', ')}` : ''}
+                </span>
                 <CornerDownLeft className="w-3 h-3 ml-auto shrink-0 text-theme-text-tertiary" />
               </button>
             )}
