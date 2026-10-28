@@ -367,16 +367,21 @@ export function AnalysisStory({
   const sectionRef = useRef<HTMLElement>(null);
   // Null until measured, which happens before the first paint.
   const [wide, setWide] = useState<boolean | null>(null);
+  const wideRef = useRef<boolean | null>(null);
   useLayoutEffect(() => {
     const element = sectionRef.current;
     if (!element) return;
     const measure = () => {
       const width = element.clientWidth;
-      setWide((previous) =>
-        previous
-          ? width >= STORY_FOLD_BELOW_WIDTH
-          : width >= STORY_OPEN_MIN_WIDTH,
-      );
+      const next = wideRef.current
+        ? width >= STORY_FOLD_BELOW_WIDTH
+        : width >= STORY_OPEN_MIN_WIDTH;
+      // Folding would make the focused element inert and drop keyboard
+      // focus; a reader working inside the story keeps it open.
+      if (wideRef.current && !next && element.contains(document.activeElement))
+        setChoice((current) => current ?? true);
+      wideRef.current = next;
+      setWide(next);
     };
     measure();
     if (typeof ResizeObserver === "undefined") return;

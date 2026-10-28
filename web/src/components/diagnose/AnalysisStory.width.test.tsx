@@ -154,6 +154,20 @@ describe("AnalysisStory at reading width", () => {
     expect(isOpen()).toBe(false);
   });
 
+  it("stays open when narrowing would fold away the element holding focus", () => {
+    mount(900);
+    const trailing = container.querySelector<HTMLElement>("[data-trailing]")!;
+    trailing.tabIndex = -1;
+    act(() => trailing.focus());
+    expect(document.activeElement).toBe(trailing);
+    resize(500);
+    expect(isOpen()).toBe(true);
+    expect(trailing.closest("[inert]")).toBeNull();
+    // That counts as the reader's choice: it no longer follows the width.
+    resize(450);
+    expect(isOpen()).toBe(true);
+  });
+
   it("keeps the reader's fold choice whatever the width does", () => {
     mount(900);
     act(() => toggle().click());
