@@ -75,17 +75,13 @@ func handleOperatorDiagnose(ctx context.Context, input diagnoseInput, kind, reso
 	children := k8s.OperatorChildrenForObject(u, func(c *ownership.Catalog) ownership.Access { return ownershipAccess(ctx, c) })
 	rc := buildMCPResourceContextWithOperatorChildren(ctx, u, kind, input.Namespace, input.Name, resourcecontext.TierDiagnostic, k8s.FindStaleSecretEnvChecksForObject(ctx, cache, u), nil, children)
 	resp := operatorDiagnoseResponse{Resource: minified, ResourceContext: rc, RelatedIssues: related, Warnings: objectWarnings(u, rc)}
-	if canReadInNamespace(ctx, "", "events", input.Namespace, "list") {
-		events, total, excluded, eventErr := fetchEventsForResource(cache, kind, input.Group, input.Namespace, input.Name, u.GetUID(), "", nil, 10)
-		resp.Events, resp.EventsTotalGroups = events, total
-		if eventErr != nil {
-			resp.EventsError = eventErr.Error()
-		}
-		if excluded > 0 {
-			resp.Warnings = append(resp.Warnings, earlierIncarnationEventsNote(excluded, false))
-		}
-	} else {
-		resp.EventsError = "forbidden: cannot list events in this namespace"
+	events, total, excluded, eventErr := fetchEventsForResource(cache, kind, input.Group, input.Namespace, input.Name, u.GetUID(), "", nil, 10)
+	resp.Events, resp.EventsTotalGroups = events, total
+	if eventErr != nil {
+		resp.EventsError = eventErr.Error()
+	}
+	if excluded > 0 {
+		resp.Warnings = append(resp.Warnings, earlierIncarnationEventsNote(excluded, false))
 	}
 	if children == nil || children.Context == nil {
 		resp.Warnings = append(resp.Warnings, "Owned resources could not be established. Retry diagnose after caches load; an empty runtime bundle is not proof there are no workloads.")
@@ -116,11 +112,16 @@ func handleOperatorDiagnose(ctx context.Context, input diagnoseInput, kind, reso
 			ref := resourcecontext.ContextRef{Group: target.Group, Kind: target.Kind, Namespace: target.Namespace, Name: target.Name}
 			entry := &diagnosedWorkload{Ref: ref}
 			if target.Group == "apps" && (target.Kind == "Deployment" || target.Kind == "DaemonSet") {
-				child := input
-				child.Kind, child.Group, child.Namespace, child.Name = target.Kind, target.Group, target.Namespace, target.Name
-				entry.Diagnosis, err = diagnoseWorkload(ctx, child, nil)
-				if err != nil {
-					entry.Error = boundDiagnoseMetricsError(err.Error())
+				resource := normalizeDiagnoseKind(target.Kind)
+				if !canReadInNamespace(ctx, target.Group, resource, target.Namespace, "get") {
+					entry.Error = fmt.Sprintf("forbidden: cannot get %s.%s in namespace %q", resource, target.Group, target.Namespace)
+				} else {
+					child := input
+					child.Kind, child.Group, child.Namespace, child.Name = target.Kind, target.Group, target.Namespace, target.Name
+					entry.Diagnosis, err = diagnoseWorkload(ctx, child, nil)
+					if err != nil {
+						entry.Error = boundDiagnoseMetricsError(err.Error())
+					}
 				}
 			} else {
 				entry.Error = "Runtime bundles support apps Deployments and DaemonSets for declared targets. Read this reference with get_resource instead."

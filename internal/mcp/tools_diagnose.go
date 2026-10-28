@@ -89,7 +89,7 @@ type diagnoseResponse struct {
 	// the failure mode, spanning the whole pre-Running path: unschedulable pods
 	// (offending node constraint named), admission rejections (quota/
 	// PodSecurity/webhook — where no Pod is created), or post-bind CNI/volume
-	// stalls. Empty may also mean withheld evidence (see Warnings). Named for the symptom
+	// stalls. Empty does not rule out blockers outside the available evidence. Named for the symptom
 	// ("can't start"), not the subsystem — "scheduling" alone would mislead,
 	// since it also covers admission and post-bind.
 	StartupBlockers []startupBlocker `json:"startupBlockers,omitempty"`
@@ -97,7 +97,8 @@ type diagnoseResponse struct {
 	// object: the grouped issues whose subject OR an affected member is the
 	// diagnosed resource (crashloop, missing refs, HPA can't-scale, GitOps
 	// failure, …). Saves the agent re-deriving from raw logs/events what the
-	// issue engine knows. Empty may also mean withheld evidence (see Warnings).
+	// issue engine knows. Empty does not rule out findings outside the caller's
+	// readable evidence or the detectors Radar runs.
 	RelatedIssues []issues.Issue           `json:"relatedIssues,omitempty"`
 	ChangeContext *issuesapi.ChangeContext `json:"changeContext,omitempty"`
 	RecentChanges []issuesapi.RecentChange `json:"recentChanges,omitempty"`
@@ -300,6 +301,9 @@ func handleDiagnose(ctx context.Context, _ *mcp.CallToolRequest, input diagnoseI
 
 // diagnoseWorkload is also the bounded bundle for an operator's observed child.
 // expectedOwner refuses a child replaced or reparented after ownership lookup.
+// Cached ordinary workload evidence follows namespace visibility, as RelatedIssues
+// does. Operator-derived references retain their exact-kind Get requirement;
+// live logs and metrics keep their own authorization.
 func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *ownership.Observation) (*diagnoseResponse, error) {
 	kindNorm := normalizeDiagnoseKind(input.Kind)
 	if kindNorm == "" {
@@ -310,7 +314,7 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		return nil, fmt.Errorf("invalid group %q for %s: expected %q", input.Group, input.Kind, expectedGroup)
 	}
 	input.Group = expectedGroup
-	if !canReadInNamespace(ctx, input.Group, kindNorm, input.Namespace, "get") {
+	if expectedOwner != nil && !canReadInNamespace(ctx, input.Group, kindNorm, input.Namespace, "get") {
 		return nil, fmt.Errorf("forbidden: cannot get %s.%s in namespace %q", kindNorm, input.Group, input.Namespace)
 	}
 
@@ -360,27 +364,13 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		return nil, fmt.Errorf("failed to minify: %w", err)
 	}
 
-	canReadPods := kindNorm == "pods" || canReadInNamespace(ctx, "", "pods", input.Namespace, "list")
-	canReadEvents := canReadInNamespace(ctx, "", "events", input.Namespace, "list")
-	var pods []*corev1.Pod
-	var podsErr error
-	if canReadPods {
-		pods, podsErr = resolveDiagnosePods(cache, kindNorm, input.Namespace, input.Name, obj)
-	} else {
-		podsErr = fmt.Errorf("%w: caller cannot list Pods in this namespace", errPodsNotListable)
-	}
+	pods, podsErr := resolveDiagnosePods(cache, kindNorm, input.Namespace, input.Name, obj)
 	podsNotListable := errors.Is(podsErr, errPodsNotListable)
 	podsCacheWarming := errors.Is(podsErr, errPodsCacheWarming)
 	if podsErr != nil && !podsNotListable && !podsCacheWarming {
 		return nil, podsErr
 	}
-	// These detectors mix Pod and Event evidence. Withhold the projection
-	// when either input is denied instead of leaking it through derived prose.
-	var issueSummary *resourcecontext.IssueSummary
-	var issueRows []issues.Issue
-	if canReadPods && canReadEvents {
-		issueSummary, issueRows = computeMCPIssueContext(ctx, cache, canonicalGroup, canonicalKind, input.Namespace, input.Name, true)
-	}
+	issueSummary, issueRows := computeMCPIssueContext(ctx, cache, canonicalGroup, canonicalKind, input.Namespace, input.Name, true)
 	resCtx := buildMCPResourceContextWithStaleChecks(
 		ctx,
 		obj,
@@ -483,19 +473,12 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 		)
 	}
 
-	var eventsExcluded int
-	if canReadEvents {
-		events, total, excluded, eventErr := fetchEventsForResource(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, objectMeta.GetUID(), types.UID(objectMeta.GetAnnotations()[corev1.MirrorPodAnnotationKey]), pods, 10)
-		resp.Events, resp.EventsTotalGroups, eventsExcluded = events, total, excluded
-		if eventErr != nil {
-			resp.EventsError = eventErr.Error()
-		}
-	} else {
-		resp.EventsError = "forbidden: cannot list events in this namespace"
+	events, total, eventsExcluded, eventErr := fetchEventsForResource(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, objectMeta.GetUID(), types.UID(objectMeta.GetAnnotations()[corev1.MirrorPodAnnotationKey]), pods, 10)
+	resp.Events, resp.EventsTotalGroups = events, total
+	if eventErr != nil {
+		resp.EventsError = eventErr.Error()
 	}
-	if canReadPods && canReadEvents {
-		resp.StartupBlockers = startupBlockersForWorkload(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, pods)
-	}
+	resp.StartupBlockers = startupBlockersForWorkload(cache, kindNorm, canonicalGroup, input.Namespace, input.Name, pods)
 
 	if len(resp.RelatedIssues) > 0 || len(resp.StartupBlockers) > 0 {
 		if p := issues.NewCacheProvider(); p != nil {
@@ -544,9 +527,6 @@ func diagnoseWorkload(ctx context.Context, input diagnoseInput, expectedOwner *o
 	}
 	resp.DNSContext = dnsContextForDiagnose(ctx, cache, obj, pods, resp.LogsCurrent, resp.LogsPrevious, resp.Events)
 	resp.Warnings = objectWarnings(obj, resCtx)
-	if !canReadPods || !canReadEvents {
-		resp.Warnings = append(resp.Warnings, "Related Issues and startup blockers are omitted because the caller cannot read all of their Pod/Event evidence. Empty findings are not an all-clear.")
-	}
 	if podsNotListable {
 		// Say it plainly: everything pod-derived is empty because the pods
 		// could not be listed, not because the workload has none.
