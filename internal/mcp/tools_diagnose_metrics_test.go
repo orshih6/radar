@@ -404,9 +404,12 @@ func TestHandleDiagnoseMetricsOmittedWhenWorkloadReadDenied(t *testing.T) {
 	grantDiagnoseRead(t, "scoped")
 	getPermCache().Get("scoped", nil).SetCanI("get", "apps", "deployments", "alpha", false)
 
-	result, _, err := handleDiagnose(ctx, nil, testDiagnoseInput("deployment", "alpha", "cart"))
-	if err == nil || !strings.Contains(err.Error(), "forbidden") || result != nil {
-		t.Fatalf("denied workload read returned data: result=%v err=%v", result, err)
+	result, metrics := diagnoseMetricsResult(t, ctx, testDiagnoseInput("deployment", "alpha", "cart"))
+	if result.Resource == nil || result.Pods == 0 {
+		t.Fatalf("namespace-visible cached evidence was withheld: %+v", result)
+	}
+	if metrics != nil {
+		t.Fatalf("live metrics returned without workload Get: %+v", metrics)
 	}
 	if f.probeCalls != 0 || len(f.rangeParams) != 0 {
 		t.Fatalf("Prometheus was contacted (%d probes, %d range queries) for a denied read", f.probeCalls, len(f.rangeParams))
