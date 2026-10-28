@@ -305,18 +305,13 @@ type ArgoSyncResource struct {
 // replaces them for this sync. A JSON body that omits syncOptions (or sends
 // null) decodes to nil; one that sends [] decodes to an empty list.
 type ArgoSyncOptions struct {
-	Resources []ArgoSyncResource `json:"resources,omitempty"`
-	Revision  string             `json:"revision,omitempty"`
-	Prune     *bool              `json:"prune,omitempty"`
-	// DryRun is omitted when nil; false is written explicitly.
-	DryRun *bool `json:"dryRun,omitempty"`
-	// Force enables force only when true, using hooks unless ApplyOnly is true.
-	// Nil and false do not enable force.
-	Force *bool `json:"force,omitempty"`
-	// ApplyOnly selects the apply strategy (without hooks) only when true.
-	// Nil and false keep hooks, with force only when Force is true.
-	ApplyOnly   *bool    `json:"applyOnly,omitempty"`
-	SyncOptions []string `json:"syncOptions"`
+	Resources   []ArgoSyncResource `json:"resources,omitempty"`
+	Revision    string             `json:"revision,omitempty"`
+	Prune       *bool              `json:"prune,omitempty"`
+	DryRun      *bool              `json:"dryRun,omitempty"`
+	Force       *bool              `json:"force,omitempty"`
+	ApplyOnly   *bool              `json:"applyOnly,omitempty"`
+	SyncOptions []string           `json:"syncOptions"`
 }
 
 type ArgoResourceValidationResult struct {
