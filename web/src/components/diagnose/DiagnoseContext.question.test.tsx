@@ -129,4 +129,15 @@ describe("starting from a question", () => {
     await flush();
     expect(diagnose.questionDraft?.text).toBe("draft B");
   });
+
+  it("hands back an explicit all-namespaces choice as it was", async () => {
+    api.consented = { "claude:safeguarded": true };
+    await act(async () => diagnose.recheckAgents());
+    api.createRun.mockRejectedValue(new DiagnoseError(409, "refused"));
+    await act(async () =>
+      diagnose.openInvestigation({ ...question, namespaces: [] }),
+    );
+    await flush();
+    expect(diagnose.questionDraft?.namespaces).toEqual([]);
+  });
 });

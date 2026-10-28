@@ -24,6 +24,12 @@ const SINGLE_RESOURCE_TOOLS = new Set([
   "get_pod_logs",
 ]);
 
+const NAMESPACED_ONLY_TOOLS = new Set([
+  "get_events",
+  "get_pod_logs",
+  "get_workload_logs",
+]);
+
 // The resources a question-only assessment came to rest on, causes first.
 // Each is named by what Radar produced, never by what the agent wrote: the
 // object the citation bound to, or else the resource a single-resource read
@@ -99,17 +105,23 @@ function readResource(
   const kind =
     source.tool === "get_pod_logs"
       ? "Pod"
-      : typeof args?.kind === "string"
+      : typeof args?.kind === "string" && args.kind
         ? args.kind
-        : "";
+        : source.tool === "get_workload_logs"
+          ? "Deployment"
+          : "";
+  const namespace = typeof args?.namespace === "string" ? args.namespace : "";
   if (!name || !kind) return undefined;
+  // These reads search every namespace when given none, so their arguments
+  // alone don't say which resource they were about.
+  if (!namespace && NAMESPACED_ONLY_TOOLS.has(source.tool)) return undefined;
   const group = typeof args?.group === "string" ? args.group : "";
   // Agents spell kinds every way kubectl accepts: deployment, deployments,
   // Deployment. The server canonicalizes the group when a run starts.
   return {
     kind: canonicalKind(kind, group),
     group,
-    namespace: typeof args?.namespace === "string" ? args.namespace : "",
+    namespace,
     name,
   };
 }

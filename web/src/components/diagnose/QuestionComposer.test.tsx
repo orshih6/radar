@@ -14,8 +14,13 @@ const state = vi.hoisted(() => ({
   issues: [] as unknown[],
   pinIssues: [] as unknown[],
   searchHits: [] as unknown[],
+  searchError: false,
 }));
 
+vi.mock("@skyhook-io/k8s-ui", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useDebouncedValue: <T,>(value: T) => value,
+}));
 vi.mock("./DiagnoseContext", () => ({
   useDiagnose: () => ({
     openInvestigation: state.openInvestigation,
@@ -31,9 +36,11 @@ vi.mock("../../api/client", () => ({
   useIssues: () => ({ data: { issues: state.issues } }),
   useResourceIssues: () => ({ data: state.pinIssues }),
   useSearch: () => ({
-    data: { hits: state.searchHits },
+    data: state.searchError ? undefined : { hits: state.searchHits },
     isFetching: false,
     isPlaceholderData: false,
+    isError: state.searchError,
+    refetch: vi.fn(),
   }),
 }));
 
@@ -47,6 +54,7 @@ beforeEach(() => {
   state.issues = [];
   state.pinIssues = [];
   state.searchHits = [];
+  state.searchError = false;
   state.actives = ["shop"];
   const element = document.createElement("div");
   document.body.appendChild(element);
@@ -363,5 +371,24 @@ describe("QuestionComposer", () => {
         b.textContent?.startsWith("What's causing"),
       ),
     ).toHaveLength(0);
+  });
+
+  it("says a failed resource search failed instead of finding nothing", async () => {
+    state.searchError = true;
+    await render();
+    await press("@");
+    const input = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Search for a resource to pin"]',
+    )!;
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    await act(async () => {
+      setter.call(input, "api");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("Couldn’t search resources.");
+    expect(document.body.textContent).not.toContain("No matching resources.");
   });
 });

@@ -151,6 +151,31 @@ describe("focusFromCase", () => {
     expect(focusFromCase(resolution([core, knative]))).toHaveLength(2);
   });
 
+  it("does not guess a resource from a read that searched every namespace", () => {
+    expect(
+      focusFromCase(
+        resolution([
+          item("cause", "get_events", { kind: "Deployment", name: "api" }),
+        ]),
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads workload logs as the Deployment the tool defaults to", () => {
+    expect(
+      focusFromCase(
+        resolution([
+          item("symptom", "get_workload_logs", {
+            namespace: "shop",
+            name: "api",
+          }),
+        ]),
+      ),
+    ).toEqual([
+      { kind: "Deployment", group: "", namespace: "shop", name: "api" },
+    ]);
+  });
+
   it("keeps the exact kind Radar recorded", () => {
     const cause = item("cause", "get_resource", { kind: "podmetrics" });
     cause.observation = {

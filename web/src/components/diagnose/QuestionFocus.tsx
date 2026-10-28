@@ -17,6 +17,7 @@ export function QuestionFocus({
   onInvestigate,
   onChooseResource,
   disabled,
+  stale = false,
 }: {
   focus: InvestigationTargetIdentity[];
   onOpenResource?: (ref: DiagnosisResourceRef) => void;
@@ -24,7 +25,30 @@ export function QuestionFocus({
   /** Ask the same question about a resource the engineer picks. */
   onChooseResource: () => void;
   disabled?: boolean;
+  /** The run is about another cluster: its resources can't be opened or
+   *  investigated from this one. */
+  stale?: boolean;
 }) {
+  if (stale) {
+    return focus.length > 0 ? (
+      <section aria-label="Focused on" className="card-inner px-3 py-2">
+        <h3 className="text-xs font-medium text-theme-text-tertiary">
+          Focused on
+        </h3>
+        <ul className="mt-1 space-y-1 text-sm text-theme-text-primary">
+          {focus.map((resource) => (
+            <li key={formatInvestigationTarget(resource)} className="truncate">
+              {formatInvestigationTarget(resource)}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1.5 text-[11px] text-theme-text-tertiary">
+          In the cluster this investigation ran against. Switch back to it to
+          open or investigate these.
+        </p>
+      </section>
+    ) : null;
+  }
   const choose = (
     <button
       type="button"
@@ -80,7 +104,7 @@ export function QuestionFocus({
                 onClick={() => onInvestigate(resource)}
                 className="inline-flex shrink-0 items-center gap-1 text-xs text-accent-text hover:underline disabled:opacity-50"
               >
-                Investigate here
+                Investigate this resource
                 <ArrowRight className="h-3 w-3" />
               </button>
             </li>

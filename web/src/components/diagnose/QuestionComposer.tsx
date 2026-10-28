@@ -4,7 +4,7 @@
 // Investigate on a resource; it is not a chat.
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowRight, AtSign, X } from "lucide-react";
-import { Collapse } from "@skyhook-io/k8s-ui";
+import { Collapse, useDebouncedValue } from "@skyhook-io/k8s-ui";
 
 import {
   useIssues,
@@ -13,6 +13,7 @@ import {
   useSearch,
 } from "../../api/client";
 import { kindToPluralWithGroup } from "../../utils/navigation";
+import { searchCoverageNote } from "../ui/searchCoverageNote";
 import { useDiagnose } from "./DiagnoseContext";
 import {
   suggestionsForPin,
@@ -135,8 +136,8 @@ export function QuestionComposer({
         : null,
     );
     setPin(questionDraft.pin ?? null);
-    if (questionDraft.namespaces) setNamespaces(questionDraft.namespaces);
-    if (questionDraft.lookBack) setLookBack(questionDraft.lookBack);
+    setNamespaces(questionDraft.namespaces ?? null);
+    setLookBack(questionDraft.lookBack ?? DEFAULT_LOOK_BACK);
     setPickerOpen(!!questionDraft.pickResource);
     if (!questionDraft.pickResource) textRef.current?.focus();
   }, [questionDraft]);
@@ -406,20 +407,27 @@ function ResourcePicker({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listId = useId();
-  const { data, isFetching, isPlaceholderData } = useSearch(query, {
-    context: "none",
-    limit: 8,
-    globalNs: true,
-  });
+  // Search the way the Omnibar does: once typing pauses, not per keystroke.
+  const searched = useDebouncedValue(query, 150, (value) => !value.trim());
+  const { data, isFetching, isPlaceholderData, isError, refetch } = useSearch(
+    searched,
+    { context: "none", limit: 8, globalNs: true },
+  );
+  // Results belong to what is in the box only once it has been searched.
+  const current =
+    searched === query && query.trim().length >= 2 && !isPlaceholderData;
   // Results kept from the previous query while the next one loads must not
   // be pinnable: Enter would pin what the engineer just typed away from.
   const hits = useMemo(
-    () =>
-      query.trim().length >= 2 && !isPlaceholderData
-        ? rankForPinning(data?.hits ?? [])
-        : [],
-    [query, isPlaceholderData, data],
+    () => (current && !isError ? rankForPinning(data?.hits ?? []) : []),
+    [current, isError, data],
   );
+  const note = current
+    ? searchCoverageNote(data?.coverage, { hits: data?.hits, query })
+    : undefined;
+  const noteText = note?.parts
+    ? note.parts.map((part) => part.text).join(" ")
+    : note?.text;
   const activeIndex = Math.min(active, Math.max(hits.length - 1, 0));
   const pick = (hit: (typeof hits)[number]) =>
     onPick({
@@ -490,14 +498,30 @@ function ResourcePicker({
             </button>
           </li>
         ))}
-        {query.trim().length >= 2 &&
-          !isFetching &&
-          !isPlaceholderData &&
-          hits.length === 0 && (
-            <li className="px-2 py-1 text-xs text-theme-text-tertiary">
-              No matching resources.
-            </li>
-          )}
+        {current && isError && !isFetching && (
+          <li className="flex items-center gap-2 px-2 py-1 text-xs text-theme-text-secondary">
+            Couldn’t search resources.
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="font-medium text-theme-text-primary hover:underline"
+            >
+              Try again
+            </button>
+          </li>
+        )}
+        {current && !isError && !isFetching && hits.length === 0 && (
+          <li className="px-2 py-1 text-xs text-theme-text-tertiary">
+            {noteText
+              ? "No matches in what Radar searched."
+              : "No matching resources."}
+          </li>
+        )}
+        {current && !isError && noteText && (
+          <li className="px-2 py-1 text-[11px] text-theme-text-tertiary">
+            {noteText}
+          </li>
+        )}
       </ul>
       <p className="mt-1 text-[11px] text-theme-text-tertiary">
         Pinning starts the investigation at that resource, and lets you apply a

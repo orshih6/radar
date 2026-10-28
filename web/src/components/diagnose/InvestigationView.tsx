@@ -2548,6 +2548,7 @@ export function InvestigationView({
                     {questionOnly && investigationCase ? (
                       <QuestionFocus
                         focus={questionFocus}
+                        stale={stale}
                         onOpenResource={onOpenResource}
                         disabled={interactionsBlocked}
                         onChooseResource={() =>

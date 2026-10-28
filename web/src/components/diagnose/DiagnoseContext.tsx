@@ -553,7 +553,9 @@ function RoutedDiagnoseProvider({
                   name: t.name,
                 }
               : undefined,
-            namespaces: t.namespaces?.length ? t.namespaces : undefined,
+            // An empty list is an explicit "all namespaces", not "follow the
+            // header": hand it back as it was.
+            namespaces: t.namespaces,
             lookBack: t.lookBack,
             askedAt: t.askedAt,
             restore: true,
