@@ -66,7 +66,7 @@ claude mcp add --transport http radar http://localhost:9280/mcp-readonly
 
 ## Debugging in the UI
 
-Start from **[Issues](#issues)**, a ranked queue of what's broken right now. Open a failing resource to see it in context: its owners, Pods, Services, and config on the **[Topology](#topology)**, what changed and when on the **[Timeline](#timeline)** (with diffs), and its events, logs, and YAML in the detail drawer. **[Helm](#helm)**, **[GitOps](#gitops)**, and **[Traffic](#traffic)** cover how it got deployed and who talks to it. When you want help, **Investigate** hands the same evidence to your agent ([AI investigations](#ai-investigations)). Change history starts when Radar starts and is kept in memory unless you use `--timeline-storage=sqlite`.
+Start from **[Issues](#issues)**, a ranked queue of what's broken right now. Open a failing resource to see it in context: its owners, Pods, Services, and config on the **[Topology](#topology)**, what changed and when on the **[Timeline](#timeline)** (with diffs), and its events, logs, and YAML in the detail drawer. **[Helm](#helm)**, **[GitOps](#gitops)**, and **[Traffic](#traffic)** cover how it got deployed and who talks to it. When you want help, **Investigate** hands the same evidence to your agent ([AI investigations](#ai-investigations)). Radar records resource changes while it watches the cluster; history is in memory by default, and `--timeline-storage=sqlite` or `postgres` keeps it across restarts.
 
 <p align="center">
   <img src="docs/screenshots/issues-view.png" alt="Radar's Issues queue in the shop namespace with two warnings: a crash loop on the checkout Deployment, and the orders-db-legacy Service, whose selector matches no pods. Each row has an Investigate button." width="800">
@@ -88,7 +88,7 @@ Pointed at raw `kubectl`, an agent spends its context window on YAML and its tim
 
 ### Connect your agent
 
-MCP is on by default and served on the same port as the UI: `9280` unless you set `--port`. The desktop app picks its own port, so copy the endpoint from Radar's MCP dialog. Start with the read-only endpoint:
+MCP is on by default and served on the same port as the UI: `9280` unless you set `--port`. The desktop app picks its own port: copy the URL from Radar's MCP dialog and change the final `/mcp` to `/mcp-readonly`. Start with the read-only endpoint:
 
 ```bash
 # Claude Code
@@ -113,9 +113,9 @@ radar diagnose deploy/checkout -n shop
 radar diagnose deploy/checkout -n shop --json > conclusion.json
 ```
 
-Every investigation ends on the same Findings page, with the evidence behind each claim. Radar's investigation tools can only read the cluster, and Radar applies a fix only when you approve it, from an investigation of the resource it changes. What else the agent can do depends on how Radar runs it. **Radar safeguards** (Claude Code and Codex) shuts off the agent's other MCP servers and its ability to write. **Your agent setup** (the only option for Cursor and OpenCode) runs the agent with its normal configuration, tools, and MCP servers, which Radar cannot constrain and which may be able to change your cluster. See [agents and isolation](https://radarhq.io/docs/features/diagnose#agents-and-isolation).
+Every investigation ends on the same Findings page, with the evidence behind each claim. Radar's investigation tools can only read the cluster, and Radar applies a fix only when you approve it, from an investigation of the resource it changes. What else the agent can do depends on how Radar runs it. **Radar safeguards** (Claude Code and Codex) shuts off the agent's other MCP servers and its ability to write. **Your agent setup** (the only option for Cursor and OpenCode) runs the agent with its normal configuration, tools, and MCP servers, which Radar cannot constrain and which may be able to change your cluster. Cursor and OpenCode approve tool requests automatically in these runs, without asking you. See [agents and isolation](https://radarhq.io/docs/features/diagnose#agents-and-isolation).
 
-Investigations run in a Radar on your own machine (CLI or desktop app), with a supported agent CLI installed there, MCP on, and authentication off. In-cluster and other shared installs don't run them. See the [AI investigations guide](https://radarhq.io/docs/features/diagnose) and [agent CLI setup](docs/configuration.md#ai-investigations-agent-cli).
+Investigations need a supported agent CLI on the machine running Radar, MCP on, and authentication off. In-cluster installs don't run them. See the [AI investigations guide](https://radarhq.io/docs/features/diagnose) and [agent CLI setup](docs/configuration.md#ai-investigations-agent-cli).
 
 ### Benchmarks
 
@@ -124,7 +124,7 @@ Three studies of an AI agent diagnosing live faults from [SREGym](https://github
 | Study | Faults | Result |
 |-------|--------|--------|
 | [Radar MCP vs raw kubectl](https://radarhq.io/benchmark/mcp-vs-kubectl) — same agent and model | 50 | 64s vs 191s to a diagnosis (about 3× faster); 86% vs 60% diagnosed correctly within two minutes |
-| [Kubernetes MCP servers](https://radarhq.io/benchmark/kubernetes-mcp-servers) — Radar, containers/kubernetes-mcp-server, Flux159/mcp-server-kubernetes, Amazon EKS MCP Server, k8sgpt, raw kubectl | 25 | Radar took 57s, 2.3× faster than the next-fastest MCP server; on the 14 faults every tool got right, 33s vs 58s |
+| [Kubernetes MCP servers](https://radarhq.io/benchmark/kubernetes-mcp-servers) — Radar, containers/kubernetes-mcp-server, Flux159/mcp-server-kubernetes, Amazon EKS MCP Server, k8sgpt, raw kubectl | 25 | Radar took 57s, 2.3× faster than the next-fastest MCP server; on the 14 faults every tool got right, 33s vs 58s for the next-fastest |
 | [AI SRE tools](https://radarhq.io/benchmark/ai-sre-tools) — Claude Code + Radar MCP vs kubectl-ai, HolmesGPT, OpenSRE, kagent, AWS DevOps Agent | 50 | Claude Code + Radar MCP was the most accurate (44/50 correct), fastest (79s), and cheapest ($0.27 a fault) |
 
 Per-scenario scores and timings are downloadable from the [benchmark pages](https://radarhq.io/benchmark); the AI SRE study also includes costs.
@@ -243,7 +243,16 @@ radar
 | `--no-mcp` | `false` | Disable all MCP endpoints |
 | `--mcp-read-only` | `false` | Expose only read-only MCP tools; disable `/mcp` (env: `RADAR_MCP_READ_ONLY`) |
 
-<a id="tuning-for-slow-or-high-latency-clusters"></a>More flags: `--kubeconfig-dir`, `--namespaces`, `--namespace-scope`, `--base-path`, `--allowed-hosts`, `--trusted-origins`, `--browser`, `--timeline-db`, `--timeline-max-size`, `--history-limit`, `--disable-helm-write`, `--disable-local-terminal`, `--debug-image`, `--list-page-size`, `--context-switch-timeout`, `--first-paint-backstop`, `--namespace-list-timeout`, `--max-scope-candidates`, `--prometheus-url`, `--prometheus-single-cluster`, `--prometheus-cluster-label`, `--prometheus-header`, `--prometheus-header-from-env`, `--beyla-job-selector`, `--opencost-currency`, `--mcp-catalog-stdio`, `--version`. Each is described in the [Configuration Guide](docs/configuration.md#cli-flags), with tuning for slow or high-latency clusters, kubeconfig precedence, and context switching. `radar --help` is authoritative for the installed version. `radar cloud status` inspects an in-cluster Radar Cloud installation without changing it ([details](docs/configuration.md#radar-cloud)).
+<a id="tuning-for-slow-or-high-latency-clusters"></a>The [Configuration Guide](docs/configuration.md#cli-flags) describes every startup flag in the table above and 27 more, plus tuning for slow or high-latency clusters, kubeconfig precedence, and context switching.
+
+<details>
+<summary>The other 27 flags</summary>
+
+`--kubeconfig-dir`, `--namespaces`, `--namespace-scope`, `--base-path`, `--allowed-hosts`, `--trusted-origins`, `--browser`, `--timeline-db`, `--timeline-max-size`, `--history-limit`, `--disable-helm-write`, `--disable-local-terminal`, `--debug-image`, `--list-page-size`, `--context-switch-timeout`, `--first-paint-backstop`, `--namespace-list-timeout`, `--max-scope-candidates`, `--prometheus-url`, `--prometheus-single-cluster`, `--prometheus-cluster-label`, `--prometheus-header`, `--prometheus-header-from-env`, `--beyla-job-selector`, `--opencost-currency`, `--mcp-catalog-stdio`, `--version`
+
+</details>
+
+`radar --help` is authoritative for the installed version. `radar cloud status` inspects an in-cluster Radar Cloud installation without changing it ([details](docs/configuration.md#radar-cloud)).
 
 ---
 

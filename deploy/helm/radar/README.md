@@ -535,7 +535,10 @@ Always granted (required for basic functionality):
 
 | API Group | Resources |
 |-----------|-----------|
-| Core (`""`) | pods, services, configmaps, events, namespaces, nodes, pvcs, serviceaccounts, endpoints |
+| Core (`""`) | pods, services, configmaps, events, namespaces, nodes, persistentvolumes, pvcs, serviceaccounts, endpoints, limitranges, resourcequotas |
+| `discovery.k8s.io` | endpointslices |
+| `policy` | poddisruptionbudgets |
+| `storage.k8s.io` | storageclasses |
 | `apps` | deployments, daemonsets, statefulsets, replicasets, controllerrevisions |
 | `networking.k8s.io` | ingresses, networkpolicies |
 | `batch` | jobs, cronjobs |
