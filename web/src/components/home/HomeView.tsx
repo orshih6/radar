@@ -301,6 +301,17 @@ function BandItem({ children }: { children: ReactNode }) {
 // Problems Panel (right sidebar, scrollable)
 // ============================================================================
 
+// The row's Investigate action is a sibling of the row button (a button can't
+// nest in a button). With a pointer it floats over the row's right edge, shown
+// on hover or keyboard focus; hidden it takes no clicks, and it appears without
+// a fade so a click never lands on a still-invisible button. On touch there is
+// no hover, so it sits in the row's flow below the text instead of covering it.
+const ISSUE_ROW_ACTION_CLASS = clsx(
+  'absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-theme-surface shadow-theme-sm empty:hidden',
+  'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
+  '[@media(hover:none)]:static [@media(hover:none)]:translate-y-0 [@media(hover:none)]:flex [@media(hover:none)]:justify-end [@media(hover:none)]:bg-transparent [@media(hover:none)]:shadow-none [@media(hover:none)]:px-3 [@media(hover:none)]:pb-1.5 [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto',
+)
+
 interface ProblemsPanelProps {
   issues: Issue[]
   issueCount: number
@@ -440,7 +451,7 @@ export function ProblemsPanel({
                     <div key={issue.id} className="group relative">
                       <button
                         type="button"
-                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-theme-hover focus-visible:bg-theme-hover focus-visible:outline-none transition-colors text-left"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-theme-hover focus-visible:bg-theme-hover transition-colors text-left"
                         onClick={() => onResourceClick({
                           kind: ref.kind,
                           namespace: ref.namespace ?? '',
@@ -482,10 +493,7 @@ export function ProblemsPanel({
                           )}
                         </div>
                       </button>
-                      {/* A sibling of the row button, not a child: a button can't
-                          nest in a button. Revealed on hover/focus where hovering
-                          exists, always shown on touch; hidden it takes no clicks. */}
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-theme-surface shadow-theme-sm empty:hidden opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto">
+                      <div className={ISSUE_ROW_ACTION_CLASS}>
                         <IssueDiagnoseButton kind={ref.kind} group={ref.group} namespace={ref.namespace ?? ''} name={ref.name} />
                       </div>
                     </div>
