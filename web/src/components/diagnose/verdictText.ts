@@ -47,9 +47,8 @@ export function verdictSentence(diagnosis: {
 // How sure the assessment is, in the words Findings shows beside it, so a
 // sentence repeated elsewhere never reads more certain than Findings does.
 export function assessmentStateLabel(
-  diagnosis: Pick<
-    Diagnosis,
-    "inconclusive" | "healthy" | "rootCause" | "certainty"
+  diagnosis: Partial<
+    Pick<Diagnosis, "inconclusive" | "healthy" | "rootCause" | "certainty">
   >,
   evidenceConflict = false,
 ): { text: string; warn: boolean } | undefined {
