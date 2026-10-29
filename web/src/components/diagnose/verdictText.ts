@@ -11,14 +11,16 @@ function isCodeSpan(part: string): boolean {
 
 type VerdictPart = { code: boolean; text: string };
 
-// A verdict split into prose and literal code, prose with its emphasis
-// markers dropped. Shared by every place that shows a verdict sentence.
+// A verdict split into prose and literal code, prose with its bold and
+// single-character emphasis markers dropped. Doubled underscores stay: in a
+// verdict they are far more often an identifier (checkout__config) than
+// markdown. Shared by every place that shows a verdict sentence.
 export function verdictParts(text: string): VerdictPart[] {
   return text.split(CODE_SPAN).flatMap((part): VerdictPart[] => {
     if (isCodeSpan(part)) return [{ code: true, text: part.slice(1, -1) }];
     const prose = part
       .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/\*\*|__/g, "")
+      .replace(/\*\*/g, "")
       .replace(/(^|\W)[*_](\S(?:[^*_\n]*\S)?)[*_](?=\W|$)/g, "$1$2");
     return prose ? [{ code: false, text: prose }] : [];
   });
@@ -41,7 +43,7 @@ export function verdictSentence(diagnosis: {
   summary?: string;
   rootCause?: string;
 }): string {
-  return plainVerdictText(diagnosis.summary || diagnosis.rootCause);
+  return plainVerdictText(diagnosis.summary?.trim() || diagnosis.rootCause);
 }
 
 // How sure the assessment is, in the words Findings shows beside it, so a

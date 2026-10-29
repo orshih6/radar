@@ -48,7 +48,16 @@ describe("verdictSentence", () => {
     ).toBe("The api container exits; see logs");
   });
 
+  it("keeps doubled underscores in prose identifiers", () => {
+    expect(plainVerdictText("checkout__config is unset")).toBe(
+      "checkout__config is unset",
+    );
+  });
+
   it("falls back to the cause, and is empty for an answer", () => {
+    expect(
+      verdictSentence({ summary: "  ", rootCause: "DB_PORT is bad" }),
+    ).toBe("DB_PORT is bad");
     expect(verdictSentence({ rootCause: "DB_PORT is `abc`" })).toBe(
       "DB_PORT is abc",
     );
