@@ -544,6 +544,8 @@ Always granted (required for basic functionality):
 | `certificates.k8s.io` | podcertificaterequests, clustertrustbundles (stable in Kubernetes 1.37) |
 | `apiextensions.k8s.io` | customresourcedefinitions (for CRD discovery) |
 
+Upgrade impact also gets list-only access to CSIStorageCapacities, FlowSchemas, PriorityLevelConfigurations, and PodSecurityPolicies on clusters where those kinds are served. These reads inspect source-manifest evidence and do not add the kinds to Radar's resource browser.
+
 ### Privileged Permissions (Opt-in)
 
 Disabled by default for security:
