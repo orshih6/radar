@@ -4,6 +4,7 @@ import { Network, ArrowRight } from 'lucide-react'
 import { clsx } from 'clsx'
 import { StatusDot, pluralNoun, type Issue } from '@skyhook-io/k8s-ui'
 import { SEVERITY_TEXT } from '@skyhook-io/k8s-ui/utils/badge-colors'
+import { Tooltip } from '../ui/Tooltip'
 
 /** What the Home issues query holds, for ranking namespaces when the graph is withheld. */
 export interface TopologyPreviewIssues {
@@ -311,7 +312,12 @@ function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<Topolo
       <div className="flex-1 min-h-0 flex flex-col px-3 py-2">
         <p className="px-2 pb-1.5 text-[11px] leading-snug text-theme-text-tertiary">
           Too large to graph every namespace at once.
-          {ranked.length > 0 && ' Start with the namespaces that have the most issues:'}
+          {ranked.length > 0 && (issues.truncated
+            // The list holds only the most severe issues, so a namespace with
+            // many older ones can be missing: these are places to start, not
+            // a ranking of the whole cluster.
+            ? ` Namespaces from the ${issues.issues.length} most severe issues:`
+            : ' Namespaces with the most issues:')}
         </p>
         {issues.loading ? (
           <div className="flex flex-col gap-1.5 px-2 pt-1" aria-label="Loading namespaces">
@@ -323,10 +329,10 @@ function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<Topolo
           <ul className="flex flex-col">
             {ranked.map(ns => (
               <li key={ns.name}>
+                <Tooltip content={`Open ${ns.name} in Topology. Sets the namespace for all of Radar.`} wrapperClassName="block w-full">
                 <button
                   type="button"
                   onClick={() => onOpenNamespace(ns.name)}
-                  title={`Open ${ns.name} in Topology. Sets the namespace for all of Radar.`}
                   className="group/row w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-theme-hover transition-colors"
                 >
                   <StatusDot tone={ns.critical > 0 ? 'unhealthy' : 'degraded'} className="shrink-0" />
@@ -337,6 +343,7 @@ function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<Topolo
                   </span>
                   <ArrowRight className="w-3 h-3 shrink-0 text-theme-text-tertiary opacity-0 group-hover/row:opacity-100 transition-opacity" />
                 </button>
+                </Tooltip>
               </li>
             ))}
           </ul>

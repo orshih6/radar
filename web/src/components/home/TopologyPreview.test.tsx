@@ -115,6 +115,8 @@ describe('TopologyPreview', () => {
   it('marks counts as lower bounds when the issue list was cut short', () => {
     render(props({ issues: { issues: [issue('payments', 'critical')], truncated: true, loading: false } }))
     expect(namespaceRows()[0].textContent).toBe('payments≥1 critical · ≥1 issue')
+    expect(container.textContent).toContain('Namespaces from the 1 most severe issues:')
+    expect(container.textContent).not.toContain('most issues')
   })
 
   it('opens the clicked namespace in Topology, and Open Topology still opens the view', () => {
