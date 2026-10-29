@@ -63,7 +63,7 @@ export const RELEASE_NOTES: ReleaseNotes[] = [
         id: 'mcp-delete-exec-tools',
         icon: Bot,
         title: 'New MCP tools: delete and exec',
-        description: 'delete_resource previews what a deletion removes and requires confirmation before deleting. Opt-in exec_pod runs one command in a container.',
+        description: "delete_resource previews a deletion's likely impact and requires confirmation before deleting. Opt-in exec_pod runs one command in a container.",
         importance: 7,
       },
       {
@@ -93,7 +93,7 @@ export const RELEASE_NOTES: ReleaseNotes[] = [
         id: 'custom-resource-changes',
         icon: GitCompareArrows,
         title: 'Custom-resource history names changed fields',
-        description: 'Change history names the custom-resource fields that changed, with values. Ask get_changes for a kind to get its creates and deletes too.',
+        description: 'Change history names the custom-resource fields that changed, with values when safe to show. get_changes for a kind also returns creates and deletes.',
         importance: 5,
       },
     ],
