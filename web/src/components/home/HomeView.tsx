@@ -189,7 +189,12 @@ export function HomeView({ namespaces, topology, fallbackClusterLoadState, onNav
                 topology={scopedTopology}
                 namespaceSelected={namespaces.length > 0}
                 onNavigate={() => onNavigateToView('topology')}
-                issues={{ issues, truncated: issueCount > issues.length, loading: issuesLoading && !issuesData }}
+                issues={{
+                  issues,
+                  truncated: issueCount > issues.length,
+                  incomplete: !!issuesData?.visibility?.impact || (issuesData?.unchecked_sources?.length ?? 0) > 0,
+                  loading: issuesLoading && !issuesData,
+                }}
                 onOpenNamespace={onOpenTopologyNamespace}
               />
               <ActivitySummary

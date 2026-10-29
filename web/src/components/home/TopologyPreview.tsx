@@ -11,6 +11,8 @@ export interface TopologyPreviewIssues {
   issues: Issue[]
   /** The response held fewer issues than matched, so per-namespace counts are lower bounds. */
   truncated: boolean
+  /** Some issue sources went unchecked or unread, so namespaces can have issues not counted here. */
+  incomplete: boolean
   loading: boolean
 }
 
@@ -300,7 +302,7 @@ export function TopologyPreview({ topology, namespaceSelected, onNavigate, issue
 
 function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<TopologyPreviewProps, 'issues' | 'onNavigate' | 'onOpenNamespace'>) {
   const ranked = useMemo(() => rankNamespacesByIssues(issues.issues), [issues.issues])
-  const bound = issues.truncated ? '≥' : ''
+  const bound = issues.truncated || issues.incomplete ? '≥' : ''
 
   return (
     <div className="h-[260px] rounded-xl bg-theme-surface shadow-theme-sm overflow-hidden flex flex-col">
@@ -317,7 +319,9 @@ function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<Topolo
             // many older ones can be missing: these are places to start, not
             // a ranking of the whole cluster.
             ? ` Namespaces from the ${issues.issues.length} most severe issues:`
-            : ' Namespaces with the most issues:')}
+            : issues.incomplete
+              ? ' Namespaces with the most issues Radar could check:'
+              : ' Namespaces with the most issues:')}
         </p>
         {issues.loading ? (
           <div className="flex flex-col gap-1.5 px-2 pt-1" aria-label="Loading namespaces">

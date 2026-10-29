@@ -27,7 +27,7 @@ const props = (overrides: Partial<Props>): Props => ({
   topology: largeTopology,
   namespaceSelected: false,
   onNavigate: vi.fn(),
-  issues: { issues: [], truncated: false, loading: false },
+  issues: { issues: [], truncated: false, incomplete: false, loading: false },
   onOpenNamespace: vi.fn(),
   ...overrides,
 })
@@ -83,7 +83,7 @@ describe('rankNamespacesByIssues', () => {
 
 describe('TopologyPreview', () => {
   it('keeps the graph preview when the cluster is small enough to graph', () => {
-    render(props({ topology: smallTopology, issues: { issues: [issue('default', 'critical')], truncated: false, loading: false } }))
+    render(props({ topology: smallTopology, issues: { issues: [issue('default', 'critical')], truncated: false, incomplete: false, loading: false } }))
     const card = container.firstElementChild as HTMLElement
     expect(card.tagName).toBe('BUTTON')
     expect(container.textContent).toContain('2 resources')
@@ -92,7 +92,7 @@ describe('TopologyPreview', () => {
   })
 
   it('keeps the graph preview while a picked namespace reaches the server', () => {
-    render(props({ namespaceSelected: true, issues: { issues: [issue('default', 'critical')], truncated: false, loading: false } }))
+    render(props({ namespaceSelected: true, issues: { issues: [issue('default', 'critical')], truncated: false, incomplete: false, loading: false } }))
     expect((container.firstElementChild as HTMLElement).tagName).toBe('BUTTON')
     expect(namespaceRows()).toHaveLength(0)
   })
@@ -102,6 +102,7 @@ describe('TopologyPreview', () => {
       issues: {
         issues: [issue('payments', 'warning', 'a'), issue('payments', 'warning', 'b'), issue('auth', 'critical')],
         truncated: false,
+        incomplete: false,
         loading: false,
       },
     }))
@@ -113,16 +114,22 @@ describe('TopologyPreview', () => {
   })
 
   it('marks counts as lower bounds when the issue list was cut short', () => {
-    render(props({ issues: { issues: [issue('payments', 'critical')], truncated: true, loading: false } }))
+    render(props({ issues: { issues: [issue('payments', 'critical')], truncated: true, incomplete: false, loading: false } }))
     expect(namespaceRows()[0].textContent).toBe('payments≥1 critical · ≥1 issue')
     expect(container.textContent).toContain('Namespaces from the 1 most severe issues:')
     expect(container.textContent).not.toContain('most issues')
   })
 
+  it('qualifies counts when some issue sources went unchecked', () => {
+    render(props({ issues: { issues: [issue('payments', 'warning')], truncated: false, incomplete: true, loading: false } }))
+    expect(namespaceRows()[0].textContent).toBe('payments≥1 issue')
+    expect(container.textContent).toContain('Namespaces with the most issues Radar could check:')
+  })
+
   it('opens the clicked namespace in Topology, and Open Topology still opens the view', () => {
     const onOpenNamespace = vi.fn()
     const onNavigate = vi.fn()
-    render(props({ onOpenNamespace, onNavigate, issues: { issues: [issue('payments', 'warning')], truncated: false, loading: false } }))
+    render(props({ onOpenNamespace, onNavigate, issues: { issues: [issue('payments', 'warning')], truncated: false, incomplete: false, loading: false } }))
     act(() => namespaceRows()[0].click())
     expect(onOpenNamespace).toHaveBeenCalledWith('payments')
     expect(onNavigate).not.toHaveBeenCalled()
@@ -134,7 +141,7 @@ describe('TopologyPreview', () => {
 
   it('offers the namespace picker when no namespace has issues', () => {
     const onNavigate = vi.fn()
-    render(props({ onNavigate, issues: { issues: [issue(undefined, 'warning', 'node-1')], truncated: false, loading: false } }))
+    render(props({ onNavigate, issues: { issues: [issue(undefined, 'warning', 'node-1')], truncated: false, incomplete: false, loading: false } }))
     expect(namespaceRows()).toHaveLength(0)
     expect(container.textContent).not.toContain('most issues')
     const choose = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Choose a namespace')!
@@ -143,7 +150,7 @@ describe('TopologyPreview', () => {
   })
 
   it('shows placeholders, not the picker fallback, while issues load', () => {
-    render(props({ issues: { issues: [], truncated: false, loading: true } }))
+    render(props({ issues: { issues: [], truncated: false, incomplete: false, loading: true } }))
     expect(container.querySelector('[aria-label="Loading namespaces"]')).not.toBeNull()
     expect(container.textContent).not.toContain('Choose a namespace')
   })
