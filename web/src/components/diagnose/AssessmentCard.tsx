@@ -32,6 +32,7 @@ import type { InvestigationHealthSignal } from "./investigationState";
 import { Badge } from "@skyhook-io/k8s-ui";
 import { diagnosisHasStoryShape, storyPlainText } from "./investigationStory";
 import { useDisclosureReveal } from "./useDisclosureReveal";
+import { verdictParts } from "./verdictText";
 import { FollowupAnswer } from "./ActivityTurn";
 import { ApplyOutcomeCard } from "./ApplyDialog";
 import {
@@ -285,22 +286,19 @@ const HEALTHY_DEFINITION: Record<
  */
 // A verdict is one sentence of prose with the odd `code` span. Rendering it
 // as full markdown would turn a leading "1." or "#" into a list or heading, so
-// only code spans are rendered and emphasis markers are dropped.
+// only code spans are rendered, with their contents exactly as written.
 export function VerdictText({ text }: { text: string }) {
   return (
     <>
-      {text
-        .replace(/\*\*|__/g, "")
-        .split(/(`[^`\n]+`)/g)
-        .map((part, index) =>
-          part.length > 2 && part.startsWith("`") && part.endsWith("`") ? (
-            <code key={index} className="inline-code">
-              {part.slice(1, -1)}
-            </code>
-          ) : (
-            part
-          ),
-        )}
+      {verdictParts(text).map((part, index) =>
+        part.code ? (
+          <code key={index} className="inline-code">
+            {part.text}
+          </code>
+        ) : (
+          part.text
+        ),
+      )}
     </>
   );
 }

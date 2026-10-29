@@ -125,7 +125,7 @@ import {
 import { parseContextName } from "../../utils/context-name";
 import type { InvestigationSourceExcerpt } from "./investigationSourceFocus";
 import { diagnosisHasStoryShape } from "./investigationStory";
-import { verdictSentence } from "./verdictText";
+import { assessmentStateLabel, verdictSentence } from "./verdictText";
 import { assessmentLimitLines } from "./investigationEvidencePresentation";
 
 const RECHECK_QUESTION =
@@ -282,18 +282,33 @@ function captureEvidenceCardLayout(container: HTMLElement) {
 const APPLY_WRITES: GitOpsWrite[] = [{ scope: "spec", description: "The proposed change" }];
 
 // The card that ends a finished turn in Activity says what was found, so the
-// reader learns the answer before deciding to open Findings. A long verdict is
-// cut at three lines; one with no sentence keeps the generic description.
+// reader learns the answer before deciding to open Findings. It carries the
+// same qualifications Findings puts beside the sentence (how sure, whether an
+// apply or newer reads have overtaken it), so it never reads more settled
+// than Findings does. A long verdict is cut at three lines; one with no
+// sentence keeps the generic description.
 function CompletionSummary({
   label,
+  state,
   sentence,
 }: {
   label: string;
+  state?: { text: string; warn: boolean };
   sentence: string;
 }) {
   return (
     <span className="min-w-0 flex-1">
-      <span className="block text-xs text-theme-text-tertiary">{label}</span>
+      <span className="block text-xs text-theme-text-tertiary">
+        {label}
+        {state ? (
+          <>
+            {" · "}
+            <span className={state.warn ? "text-warning-text" : undefined}>
+              {state.text}
+            </span>
+          </>
+        ) : null}
+      </span>
       {sentence ? (
         <span className="mt-0.5 line-clamp-3 text-sm font-medium leading-snug text-theme-text-primary [overflow-wrap:anywhere]">
           {sentence}
@@ -2283,9 +2298,26 @@ export function InvestigationView({
                             </span>
                             <CompletionSummary
                               label={
-                                turn.verify
-                                  ? "Verification complete"
-                                  : "Assessment ready"
+                                assessmentNeedsCurrentStateVerification
+                                  ? "Assessment before apply"
+                                  : hasEvidenceCollectedAfterAssessment
+                                    ? "Earlier assessment"
+                                    : turn.verify
+                                      ? "Verification complete"
+                                      : "Assessment ready"
+                              }
+                              state={
+                                assessmentNeedsCurrentStateVerification
+                                  ? {
+                                      text: "Current state unverified",
+                                      warn: true,
+                                    }
+                                  : turn.diagnosis
+                                    ? assessmentStateLabel(
+                                        turn.diagnosis,
+                                        currentAssessmentEvidenceConflict,
+                                      )
+                                    : undefined
                               }
                               sentence={
                                 turn.diagnosis
