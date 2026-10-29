@@ -12,8 +12,8 @@ installed version. Several flags also take a persistent default from `~/.radar/c
 |------|---------|-------------|
 | `--kubeconfig` | `~/.kube/config` | Path to primary kubeconfig file |
 | `--kubeconfig-dir` | | Comma-separated directories containing additional kubeconfig files |
-| `--namespace` | (all) | Initial namespace filter (supports multi-select in the UI; also used as RBAC fallback for namespace-scoped users) |
-| `--namespaces` | (all) | Initial namespace filters as a comma-separated list, e.g. `--namespaces ns1,ns2,ns3`. Use this when your identity can list resources in specific namespaces but cannot list namespaces cluster-wide. |
+| `--namespace` | (context namespace) | Initial namespace filter (supports multi-select in the UI; also used as RBAC fallback for namespace-scoped users). Unset, Radar uses your saved pick, then the kubeconfig context's namespace, then all namespaces ([Namespace Picker](#namespace-picker)) |
+| `--namespaces` | (context namespace) | Initial namespace filters as a comma-separated list, e.g. `--namespaces ns1,ns2,ns3`. Use this when your identity can list resources in specific namespaces but cannot list namespaces cluster-wide. |
 | `--namespace-scope` | `false` | Pin namespaced informer caches to a **single** namespace for large clusters (scoping to multiple namespaces is not supported yet). Requires `--namespace`, a kubeconfig context namespace, or a saved local single-namespace pick. Local mode can rebuild the cache when switching namespaces; auth/cloud mode locks the shared cache to the startup namespace. |
 | `--port` | `9280` | Server port |
 | `--listen-address` | `127.0.0.1` | HTTP listen IP address (IPv4 or IPv6), or `localhost`. Bind a specific local IP or use `0.0.0.0` for all interfaces. Non-loopback access needs authentication and network controls. |

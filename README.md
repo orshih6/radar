@@ -5,7 +5,7 @@
 
 🌐 **[radarhq.io](https://radarhq.io)** · [Docs](https://radarhq.io/docs) · [Benchmarks](https://radarhq.io/benchmark) · [Releases](https://github.com/skyhook-io/radar/releases)
 
-Radar shows you what's broken in a Kubernetes cluster, why, and what changed: issues, topology, a timeline of events and resource changes, Helm, GitOps, traffic, audit, and upgrade impact. Your AI agent reads the same model of the cluster through Radar's MCP server, and Radar can run an AI investigation for you with the agent CLI you already use. It runs on your laptop as a `kubectl` plugin or desktop app, or in-cluster with Helm.
+Radar shows you what's broken in a Kubernetes cluster, why, and what changed: issues, topology, a timeline of events and resource changes, Helm, GitOps, traffic, audit, and upgrade impact. Your AI agent reads the same cluster data and relationships through Radar's MCP server, and Radar can run an AI investigation for you with the agent CLI you already use. It runs on your laptop as a `kubectl` plugin or desktop app, or in-cluster with Helm.
 
 <a href="https://www.producthunt.com/products/radar-7?launch=radar-101&utm_source=github-readme&utm_medium=badge&utm_campaign=ph-launch-2026-10" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1295110&theme=neutral" alt="Radar - You don't need an AI SRE. Give your agent Radar. | Product Hunt" width="250" height="54" /></a>
 
@@ -44,11 +44,11 @@ curl -fsSL https://get.radarhq.io | sh && kubectl radar
 ```
 Or `brew install kubectl-radar`. [Windows, Krew, desktop app and Helm ↓](#installation)
 
-**Then connect your AI agent** (read-only):
+**Then, with Radar running, connect your AI agent** (read-only):
 ```bash
 claude mcp add --transport http radar http://localhost:9280/mcp-readonly
 ```
-[Codex, Cursor, GitHub Copilot and other clients ↓](#connect-your-agent)
+[Codex, Cursor, GitHub Copilot, other clients, and the desktop app ↓](#connect-your-agent)
 
 ## Why Radar?
 
@@ -57,7 +57,7 @@ claude mcp add --transport http radar http://localhost:9280/mcp-readonly
 - **Private by design** — your cluster data stays on your machine. No account, no agents, no cloud sync. Usage reporting is off unless you opt in, and then sends only anonymous usage counts and coarse cluster facts: Kubernetes version, platform, node-count range, known integrations ([what Radar sends](docs/configuration.md#what-radar-sends)). An AI agent you connect sends what it reads to its own model provider
 - **Airgapped-friendly** — runs as a single binary against the Kubernetes API and works in locked-down environments with outbound egress blocked
 - **Works everywhere** — GKE, EKS, AKS, minikube, kind, k3s, or any conformant cluster
-- **One model of the cluster, for you and your agent** — the UI, the [MCP server](#ai-agents-mcp-server-and-ai-investigations), and AI investigations read the same live model: relationships, health, events, and changes
+- **One model of the cluster, for you and your agent** — the UI, the [MCP server](#ai-agents-mcp-server-and-ai-investigations), and AI investigations read the same live data: relationships, health, events, and changes
 - **Ready for teams** — deploy in-cluster with Helm for shared access, with SSO (OIDC or an auth proxy) and per-user Kubernetes RBAC in the open-source build
 
 > "Have Radar deployed at work. As far as Kubernetes dashboards go, this is one of the best." — u/TheRealNetroxen
@@ -66,7 +66,12 @@ claude mcp add --transport http radar http://localhost:9280/mcp-readonly
 
 ## Debugging in the UI
 
-Start from **[Issues](#issues)**, a ranked queue of what's broken right now. Open a failing resource to see it in context: its owners, Pods, Services, and config on the **[Topology](#topology)**, what changed and when on the **[Timeline](#timeline)** (with diffs), and its events, logs, and YAML in the detail drawer. **[Helm](#helm)**, **[GitOps](#gitops)**, and **[Traffic](#traffic)** cover how it got deployed and who talks to it. When you want help, **Investigate** hands the same evidence to your agent ([AI investigations](#ai-investigations)).
+Start from **[Issues](#issues)**, a ranked queue of what's broken right now. Open a failing resource to see it in context: its owners, Pods, Services, and config on the **[Topology](#topology)**, what changed and when on the **[Timeline](#timeline)** (with diffs), and its events, logs, and YAML in the detail drawer. **[Helm](#helm)**, **[GitOps](#gitops)**, and **[Traffic](#traffic)** cover how it got deployed and who talks to it. When you want help, **Investigate** hands the same evidence to your agent ([AI investigations](#ai-investigations)). Change history starts when Radar starts and is kept in memory unless you use `--timeline-storage=sqlite`.
+
+<p align="center">
+  <img src="docs/screenshots/issues-view.png" alt="Radar's Issues queue in the shop namespace with two warnings: a crash loop on the checkout Deployment, and the orders-db-legacy Service, whose selector matches no pods. Each row has an Investigate button." width="800">
+  <br><em>Issues for the incident the agent diagnoses below: a crash loop on checkout and a Service with no endpoints</em>
+</p>
 
 ---
 
@@ -79,9 +84,11 @@ Pointed at raw `kubectl`, an agent spends its context window on YAML and its tim
   <br><em>Claude Code on Radar's read-only endpoint, finding why a rollout failed (replay of a real session)</em>
 </p>
 
+<a id="ai-integration-mcp"></a>
+
 ### Connect your agent
 
-MCP is on by default and served on the same port as the UI (`9280` unless you set `--port`). Start with the read-only endpoint:
+MCP is on by default and served on the same port as the UI: `9280` unless you set `--port`. The desktop app picks its own port, so copy the endpoint from Radar's MCP dialog. Start with the read-only endpoint:
 
 ```bash
 # Claude Code
@@ -91,11 +98,11 @@ claude mcp add --transport http radar http://localhost:9280/mcp-readonly
 codex mcp add radar --url http://localhost:9280/mcp-readonly
 ```
 
-Setup for Cursor, VS Code (GitHub Copilot), Copilot CLI, OpenCode, Google Antigravity, Kiro, JetBrains, Cline, Devin, Claude Desktop, Zed, Gemini CLI, and any other MCP client is in the **[MCP guide](docs/mcp.md#setup-instructions)**. Its examples use `/mcp`; use `/mcp-readonly` instead to keep the agent read-only.
+Setup for Cursor, VS Code (GitHub Copilot), Copilot CLI, OpenCode, Google Antigravity, Kiro, JetBrains, Cline, Devin, Claude Desktop, Zed, Gemini CLI, and any other MCP client is in the **[MCP guide](docs/mcp.md#setup-instructions)**. Its examples use `/mcp`; use `/mcp-readonly` instead to keep Radar's tools read-only. Your agent's other tools follow its own configuration.
 
 - **Context, not raw YAML** — topology, health assessments, events, changes, and logs, minified so they don't burn the context window. The [tools](docs/mcp.md#available-tools) cover resources and topology, issues, events and changes, logs, Helm, audit, upgrade readiness, RBAC, cost, and Prometheus
-- **You pick the endpoint** — `/mcp-readonly` has no write tools. The full `/mcp` endpoint, also on by default, adds write tools (restart, scale, apply, rollback, GitOps sync, node drain) marked destructive so clients can ask before running them. Calls use Radar's Kubernetes access: your kubeconfig locally, or each user's own RBAC when authentication is on. `--mcp-read-only` turns `/mcp` off and `--no-mcp` turns MCP off entirely; neither changes what the UI can do
-- **Secrets stay out** — Secret data is never returned, and environment variables, Helm values, and logs are scrubbed for known secret patterns. What Radar returns goes to your agent and its model provider, like any other tool output. See [MCP security](docs/mcp.md#security)
+- **You pick the endpoint** — `/mcp-readonly` has no write tools. The full `/mcp` endpoint, also on by default, adds write tools (restart, scale, apply, rollback, GitOps sync, node drain) marked destructive so clients can ask before running them. On `/mcp`, `diagnose` can also run an in-cluster reachability probe that creates short-lived pods. Calls use Radar's Kubernetes access: your kubeconfig locally, or each user's own RBAC when authentication is on. `--mcp-read-only` turns `/mcp` off (and with it, applying a fix from an AI investigation); `--no-mcp` turns MCP and AI investigations off. Neither blocks ordinary UI writes
+- **Secret values are withheld** — Secret reads never include `.data` or `.stringData`. Environment variables, Helm values, and logs are scrubbed for known secret patterns, which can't catch everything, and the opt-in `exec_pod` tool returns raw command output. See [MCP security](docs/mcp.md#security)
 
 ### AI investigations
 
@@ -106,21 +113,21 @@ radar diagnose deploy/checkout -n shop
 radar diagnose deploy/checkout -n shop --json > conclusion.json
 ```
 
-Every investigation ends on the same Findings page, with the evidence behind each claim. Radar's investigation tools can only read the cluster, and Radar applies a fix only when you approve it, from an investigation of the resource it changes. Under the **Your agent setup** profile (the only one for Cursor and OpenCode), the agent also keeps its own tools and MCP servers, which Radar cannot constrain; see [agents and isolation](https://radarhq.io/docs/features/diagnose#agents-and-isolation).
+Every investigation ends on the same Findings page, with the evidence behind each claim. Radar's investigation tools can only read the cluster, and Radar applies a fix only when you approve it, from an investigation of the resource it changes. What else the agent can do depends on how Radar runs it. **Radar safeguards** (Claude Code and Codex) shuts off the agent's other MCP servers and its ability to write. **Your agent setup** (the only option for Cursor and OpenCode) runs the agent with its normal configuration, tools, and MCP servers, which Radar cannot constrain and which may be able to change your cluster. See [agents and isolation](https://radarhq.io/docs/features/diagnose#agents-and-isolation).
 
-Investigations need a supported agent CLI on the machine running Radar, with MCP on and authentication off; shared, authenticated installs don't run them. See the [AI investigations guide](https://radarhq.io/docs/features/diagnose) and [agent CLI setup](docs/configuration.md#ai-investigations-agent-cli).
+Investigations run in a Radar on your own machine (CLI or desktop app), with a supported agent CLI installed there, MCP on, and authentication off. In-cluster and other shared installs don't run them. See the [AI investigations guide](https://radarhq.io/docs/features/diagnose) and [agent CLI setup](docs/configuration.md#ai-investigations-agent-cli).
 
 ### Benchmarks
 
-Three studies of an AI agent diagnosing live faults from [SREGym](https://github.com/SREGym/SREGym) (Microsoft and UIUC) on a 3-node EKS cluster, with one judge for every arm. Times are averages to a submitted answer, right or wrong. These are our own benchmarks; compare numbers within a study, not across studies.
+Three studies of an AI agent diagnosing live faults from [SREGym](https://github.com/SREGym/SREGym) (Microsoft and UIUC) on a 3-node EKS cluster, with the same judge scoring every tool. Times are averages to a submitted answer, right or wrong. These are our own benchmarks; compare numbers within a study, not across studies.
 
 | Study | Faults | Result |
 |-------|--------|--------|
-| [Radar MCP vs raw kubectl](https://radarhq.io/benchmark/mcp-vs-kubectl) — same agent and model | 50 | 64s vs 191s to a diagnosis (about 3× faster), with slightly higher accuracy |
-| [Kubernetes MCP servers](https://radarhq.io/benchmark/kubernetes-mcp-servers) — Radar, containers/kubernetes-mcp-server, Flux159/mcp-server-kubernetes, Amazon EKS MCP Server, k8sgpt, raw kubectl | 25 | Radar took 57s, 2.3× faster than the next-fastest MCP server |
+| [Radar MCP vs raw kubectl](https://radarhq.io/benchmark/mcp-vs-kubectl) — same agent and model | 50 | 64s vs 191s to a diagnosis (about 3× faster); 86% vs 60% diagnosed correctly within two minutes |
+| [Kubernetes MCP servers](https://radarhq.io/benchmark/kubernetes-mcp-servers) — Radar, containers/kubernetes-mcp-server, Flux159/mcp-server-kubernetes, Amazon EKS MCP Server, k8sgpt, raw kubectl | 25 | Radar took 57s, 2.3× faster than the next-fastest MCP server; on the 14 faults every tool got right, 33s vs 58s |
 | [AI SRE tools](https://radarhq.io/benchmark/ai-sre-tools) — Claude Code + Radar MCP vs kubectl-ai, HolmesGPT, OpenSRE, kagent, AWS DevOps Agent | 50 | Claude Code + Radar MCP was the most accurate (44/50 correct), fastest (79s), and cheapest ($0.27 a fault) |
 
-Every scenario, score, and cost is downloadable from the [benchmark pages](https://radarhq.io/benchmark).
+Per-scenario scores and timings are downloadable from the [benchmark pages](https://radarhq.io/benchmark); the AI SRE study also includes costs.
 
 ---
 
@@ -226,7 +233,7 @@ radar
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--kubeconfig` | `~/.kube/config` | Path to primary kubeconfig file |
-| `--namespace` | (all) | Initial namespace filter (supports multi-select in the UI; also used as RBAC fallback for namespace-scoped users) |
+| `--namespace` | (context namespace) | Initial namespace filter (supports multi-select in the UI; also used as RBAC fallback for namespace-scoped users). Unset, Radar uses your saved pick, then the kubeconfig context's namespace, then all namespaces |
 | `--port` | `9280` | Server port |
 | `--listen-address` | `127.0.0.1` | HTTP listen IP address (IPv4 or IPv6), or `localhost`. Bind a specific local IP or use `0.0.0.0` for all interfaces. Non-loopback access needs authentication and network controls. |
 | `--no-browser` | `false` | Don't auto-open browser |
@@ -236,7 +243,7 @@ radar
 | `--no-mcp` | `false` | Disable all MCP endpoints |
 | `--mcp-read-only` | `false` | Expose only read-only MCP tools; disable `/mcp` (env: `RADAR_MCP_READ_ONLY`) |
 
-Every flag, tuning for slow or high-latency clusters, kubeconfig precedence, and context switching are in the [Configuration Guide](docs/configuration.md#cli-flags). `radar --help` is authoritative for the installed version. `radar cloud status` inspects an in-cluster Radar Cloud installation without changing it ([details](docs/configuration.md#radar-cloud)).
+<a id="tuning-for-slow-or-high-latency-clusters"></a>More flags: `--kubeconfig-dir`, `--namespaces`, `--namespace-scope`, `--base-path`, `--allowed-hosts`, `--trusted-origins`, `--browser`, `--timeline-db`, `--timeline-max-size`, `--history-limit`, `--disable-helm-write`, `--disable-local-terminal`, `--debug-image`, `--list-page-size`, `--context-switch-timeout`, `--first-paint-backstop`, `--namespace-list-timeout`, `--max-scope-candidates`, `--prometheus-url`, `--prometheus-single-cluster`, `--prometheus-cluster-label`, `--prometheus-header`, `--prometheus-header-from-env`, `--beyla-job-selector`, `--opencost-currency`, `--mcp-catalog-stdio`, `--version`. Each is described in the [Configuration Guide](docs/configuration.md#cli-flags), with tuning for slow or high-latency clusters, kubeconfig precedence, and context switching. `radar --help` is authoritative for the installed version. `radar cloud status` inspects an in-cluster Radar Cloud installation without changing it ([details](docs/configuration.md#radar-cloud)).
 
 ---
 
@@ -353,6 +360,7 @@ Visualize live network traffic between services using Hubble, Caretta, Istio, or
 </p>
 
 - Auto-detects Hubble (Cilium), Istio, Caretta, or Grafana Beyla as traffic data sources, with a setup wizard to install one if none is detected
+- Beyla needs its `network` feature enabled, and per-port edges additionally need `dst.port` and `transport` named in `attributes.select` — both are off by default, and Radar says so in the Traffic view rather than showing partial edges silently
 - Animated flow graph showing requests per second between services, filterable by namespace, protocol, or status code
 - Focus on a workload to see only it and what it talks to; the focus is in the URL, so it can be shared
 
@@ -382,7 +390,7 @@ Proactive best-practices scanner with 44 checks across security, reliability, an
 
 - Security: privileged containers, privilege escalation, host namespaces, runtime socket mounts, secrets in ConfigMaps, and more
 - Reliability: missing probes, image tag `latest`, single-replica deployments, missing PDB/topology spread, deprecated API versions
-- Efficiency: missing requests and limits, orphan ConfigMaps/Secrets, unused or stuck PVCs and PVs
+- Efficiency: missing requests and limits, orphan ConfigMaps/Secrets, PVCs with no consumer observed, long-Pending PVCs, and Released or Failed PVs
 - Remediation guidance per finding, NSA/CISA and CIS framework labels, and per-resource opt-out via the `radarhq.io/ignore-checks` annotation
 
 See [Cluster audit](https://radarhq.io/docs/features/cluster-audit) and [audit configuration](docs/configuration.md#per-resource-check-suppression).
@@ -424,7 +432,7 @@ No auth by default (local use). See the **[Authentication Guide](docs/authentica
 
 Radar auto-discovers any CRD in your cluster. Popular tools get [dedicated integrations](docs/integrations.md) with topology edges, detail views, and AI summaries.
 
-With the Helm chart, the built-in Kubernetes kinds below are readable by default. CRD-based integrations need the CRD installed in your cluster *and* read access; most API groups are granted by default, and the chart's [RBAC](deploy/helm/radar/README.md#rbac) and [CRD access](deploy/helm/radar/README.md#crd-access) sections list what is on, what is opt-in (Secrets, RBAC objects), and how to add rules.
+The Helm chart grants read access to common built-in Kubernetes kinds; Secrets and RBAC objects depend on chart settings and the authentication mode. CRD-based integrations need the CRD installed in your cluster *and* read access; most API groups are granted by default, and the chart's [RBAC](deploy/helm/radar/README.md#rbac) and [CRD access](deploy/helm/radar/README.md#crd-access) sections list what is on, what is opt-in, and how to add rules.
 
 | Category | Resources |
 |----------|-----------|
@@ -522,7 +530,7 @@ Questions or ideas? [GitHub Discussions](https://github.com/skyhook-io/radar/dis
 
 Radar is built and maintained by [Skyhook](https://skyhook.io) (YC W23) and is open source under Apache-2.0. The OSS version is fully featured and the recommended way to run Radar.
 
-For teams that want hosted multi-cluster Radar with SSO and shared dashboards, we also offer [Radar Cloud](https://radarhq.io).
+For teams that want hosted multi-cluster Radar, with fleet views, alerts, and shared links, we also offer [Radar Cloud](https://radarhq.io).
 
 ---
 
