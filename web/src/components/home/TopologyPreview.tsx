@@ -338,7 +338,7 @@ function NamespaceStartCard({ issues, onNavigate, onOpenNamespace }: Pick<Topolo
                   <StatusDot tone={ns.critical > 0 ? 'unhealthy' : 'degraded'} className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-theme-text-primary">{ns.name}</span>
                   <span className="shrink-0 text-[10px] tabular-nums text-theme-text-tertiary">
-                    {ns.critical > 0 && <span className={SEVERITY_TEXT.error}>{bound}{ns.critical} critical &middot; </span>}
+                    {ns.critical > 0 && <><span className={SEVERITY_TEXT.error}>{bound}{ns.critical} critical</span> &middot; </>}
                     {bound}{ns.total} {pluralNoun(ns.total, 'issue')}
                   </span>
                   <ArrowRight className="w-3 h-3 shrink-0 text-theme-text-tertiary opacity-0 group-hover/row:opacity-100 transition-opacity" />
