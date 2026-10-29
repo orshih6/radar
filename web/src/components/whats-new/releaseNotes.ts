@@ -86,7 +86,7 @@ export const RELEASE_NOTES: ReleaseNotes[] = [
         id: 'issues-fewer-false-alarms',
         icon: BellOff,
         title: 'Fewer false alarms',
-        description: 'Issues stop flagging completed Pods, Deployment rollouts in progress, expected pause and deletion conditions, and recovered Cluster API Machines.',
+        description: 'Issues stop flagging completed Pods, in-budget Deployment rollout dips, expected pause and deletion conditions, and recovered Cluster API Machines.',
         importance: 6,
       },
       {
