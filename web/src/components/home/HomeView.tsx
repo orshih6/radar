@@ -35,6 +35,7 @@ import { UncheckedSourceHelp } from '../issues/UncheckedSourceHelp'
 import { clsx } from 'clsx'
 import { getVersionUpdateStatus } from '../../utils/version'
 import { RadarVersionLine } from './RadarVersionLine'
+import { IssueDiagnoseButton } from '../diagnose/LocalDiagnoseAction'
 
 interface HomeViewProps {
   namespaces: string[]
@@ -436,50 +437,58 @@ export function ProblemsPanel({
                   const timing = issueTimingForDisplay(issue)
 
                   return (
-                    <button
-                      key={issue.id}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-theme-hover transition-colors text-left"
-                      onClick={() => onResourceClick({
-                        kind: ref.kind,
-                        namespace: ref.namespace ?? '',
-                        name: ref.name,
-                        group: ref.group ?? '',
-                      })}
-                    >
-                      <StatusDot tone={issue.severity === 'critical' ? 'unhealthy' : 'degraded'} className="shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-theme-text-tertiary bg-theme-elevated px-1 py-0.5 rounded">{issue.kind}</span>
-                          <span className="text-xs text-theme-text-primary truncate font-medium">{issue.name}</span>
-                          {(age || timing) && (
-                            <span className="ml-auto flex shrink-0 items-center gap-1">
-                              {age && (
-                                <Tooltip content={issueFirstSeenTitle(issue)} delay={100}>
-                                  <span className="text-[10px] text-theme-text-tertiary tabular-nums">{age}</span>
-                                </Tooltip>
-                              )}
-                              {timing && (
-                                <Tooltip content={timing.tooltip} delay={100}>
-                                  <span className="badge-sm text-[10px] text-theme-text-secondary">{timing.chip}</span>
-                                </Tooltip>
-                              )}
-                            </span>
+                    <div key={issue.id} className="group relative">
+                      <button
+                        type="button"
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-theme-hover focus-visible:bg-theme-hover focus-visible:outline-none transition-colors text-left"
+                        onClick={() => onResourceClick({
+                          kind: ref.kind,
+                          namespace: ref.namespace ?? '',
+                          name: ref.name,
+                          group: ref.group ?? '',
+                        })}
+                      >
+                        <StatusDot tone={issue.severity === 'critical' ? 'unhealthy' : 'degraded'} className="shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-theme-text-tertiary bg-theme-elevated px-1 py-0.5 rounded">{issue.kind}</span>
+                            <span className="text-xs text-theme-text-primary truncate font-medium">{issue.name}</span>
+                            {(age || timing) && (
+                              <span className="ml-auto flex shrink-0 items-center gap-1">
+                                {age && (
+                                  <Tooltip content={issueFirstSeenTitle(issue)} delay={100}>
+                                    <span className="text-[10px] text-theme-text-tertiary tabular-nums">{age}</span>
+                                  </Tooltip>
+                                )}
+                                {timing && (
+                                  <Tooltip content={timing.tooltip} delay={100}>
+                                    <span className="badge-sm text-[10px] text-theme-text-secondary">{timing.chip}</span>
+                                  </Tooltip>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-theme-text-secondary truncate">{issueTitle(issue)}</span>
+                            <span className="text-[10px] text-theme-text-tertiary shrink-0">{groupLabel(issue.category_group)}</span>
+                            {issue.namespace && <span className="text-[10px] text-theme-text-tertiary shrink-0">{issue.namespace}</span>}
+                          </div>
+                          {(issue.reason || issue.message) && (
+                            <div className="text-[10px] text-theme-text-tertiary truncate mt-0.5">
+                              {issue.reason}
+                              {issue.reason && issue.message ? ' - ' : ''}
+                              {issue.message}
+                            </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] text-theme-text-secondary truncate">{issueTitle(issue)}</span>
-                          <span className="text-[10px] text-theme-text-tertiary shrink-0">{groupLabel(issue.category_group)}</span>
-                          {issue.namespace && <span className="text-[10px] text-theme-text-tertiary shrink-0">{issue.namespace}</span>}
-                        </div>
-                        {(issue.reason || issue.message) && (
-                          <div className="text-[10px] text-theme-text-tertiary truncate mt-0.5">
-                            {issue.reason}
-                            {issue.reason && issue.message ? ' - ' : ''}
-                            {issue.message}
-                          </div>
-                        )}
+                      </button>
+                      {/* A sibling of the row button, not a child: a button can't
+                          nest in a button. Revealed on hover/focus where hovering
+                          exists, always shown on touch; hidden it takes no clicks. */}
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-theme-surface shadow-theme-sm empty:hidden opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto">
+                        <IssueDiagnoseButton kind={ref.kind} group={ref.group} namespace={ref.namespace ?? ''} name={ref.name} />
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>
