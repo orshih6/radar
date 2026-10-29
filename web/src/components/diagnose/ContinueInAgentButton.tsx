@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+} from "react";
 import { Check, ChevronDown, Copy, TerminalSquare } from "lucide-react";
 import { clsx } from "clsx";
 import { copyText } from "@skyhook-io/k8s-ui/utils/clipboard";
@@ -39,6 +47,23 @@ export function ContinueInAgentButton({
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  // The menu lives inside the Findings scroller; open it upward when the
+  // scroller has no room below the trigger and enough above it.
+  const [openUp, setOpenUp] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!open || !shouldRender) return;
+    const trigger = rootRef.current?.getBoundingClientRect();
+    const menuHeight = menuRef.current?.offsetHeight ?? 0;
+    if (!trigger) return;
+    const bounds = rootRef.current
+      ?.closest("[data-investigation-findings-scroll]")
+      ?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+    setOpenUp(
+      menuHeight + 8 > bounds.bottom - trigger.bottom &&
+        trigger.top - bounds.top > menuHeight + 8,
+    );
+  }, [open, shouldRender]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +112,18 @@ export function ContinueInAgentButton({
   const copyCommand = () => {
     void copyText(command).then((ok) => setCopy(ok ? "copied" : "failed"));
   };
+  // Only focus that lands somewhere else closes the menu. Safari does not
+  // focus a clicked button, so a click inside blurs to nothing; clicks outside
+  // are the pointerdown listener's job.
+  const onFocusLeave = (event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget as Node | null;
+    if (next && !rootRef.current?.contains(next)) setOpen(false);
+  };
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Tab") {
+      setOpen(false);
+      return;
+    }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const items = Array.from(
       menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
@@ -103,7 +139,11 @@ export function ContinueInAgentButton({
     "inline-flex items-center gap-1.5 py-1 text-xs font-medium text-theme-text-primary hover:bg-theme-hover focus-visible:relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50";
 
   return (
-    <div ref={rootRef} className="relative inline-flex shrink-0">
+    <div
+      ref={rootRef}
+      onBlur={onFocusLeave}
+      className="relative inline-flex shrink-0"
+    >
       <div className="inline-flex rounded-md border border-theme-border bg-theme-surface">
         {localTerminal ? (
           <>
@@ -169,11 +209,16 @@ export function ContinueInAgentButton({
           inert={!open}
           onKeyDown={onMenuKeyDown}
           className={clsx(
-            "absolute right-0 top-full z-30 mt-1 w-[min(22rem,calc(100cqw-2rem))] origin-top-right rounded-lg border border-theme-border bg-theme-surface p-1 shadow-theme-lg",
+            "absolute right-0 z-30 w-[min(22rem,calc(100cqw-2rem))] rounded-lg border border-theme-border bg-theme-surface p-1 shadow-theme-lg",
+            openUp
+              ? "bottom-full mb-1 origin-bottom-right"
+              : "top-full mt-1 origin-top-right",
             TRANSITION_MENU,
             isOpen
               ? "translate-y-0 scale-100 opacity-100"
-              : "-translate-y-1 scale-[0.97] opacity-0",
+              : openUp
+                ? "translate-y-1 scale-[0.97] opacity-0"
+                : "-translate-y-1 scale-[0.97] opacity-0",
             !open && "pointer-events-none",
           )}
           style={overlayTransitionStyle(isOpen, "menu")}
@@ -205,15 +250,18 @@ export function ContinueInAgentButton({
                 className={clsx(
                   "inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-1 text-[11px] font-medium hover:bg-theme-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50",
                   copy === "copied"
-                    ? "text-emerald-500"
+                    ? "text-theme-text-primary"
                     : copy === "failed"
-                      ? "text-amber-500"
+                      ? "text-warning-text"
                       : "text-theme-text-tertiary hover:text-theme-text-primary",
                 )}
               >
                 {copy === "copied" ? (
                   <>
-                    <Check className="h-3.5 w-3.5" aria-hidden />
+                    <Check
+                      className="h-3.5 w-3.5 text-emerald-500"
+                      aria-hidden
+                    />
                     Copied
                   </>
                 ) : copy === "failed" ? (

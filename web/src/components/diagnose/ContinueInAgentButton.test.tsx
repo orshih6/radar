@@ -37,6 +37,8 @@ const settled = {
   busy: false,
   requestPending: false,
   gone: false,
+  streamReady: true,
+  verificationPending: false,
   latestTurnStatus: "done" as const,
 };
 
@@ -61,11 +63,19 @@ describe("canContinueInOwnAgent", () => {
       }),
     ).toBe(false);
     expect(
-      canContinueInOwnAgent({
-        ...settled,
-        run: run({ status: "stopping" }),
-        latestTurnStatus: undefined,
-      }),
+      canContinueInOwnAgent({ ...settled, verificationPending: true }),
+    ).toBe(false);
+  });
+
+  it("waits for a replay to catch up before trusting the transcript", () => {
+    expect(canContinueInOwnAgent({ ...settled, streamReady: false })).toBe(
+      false,
+    );
+  });
+
+  it("waits through stopping, whose terminal frame precedes the exit", () => {
+    expect(
+      canContinueInOwnAgent({ ...settled, run: run({ status: "stopping" }) }),
     ).toBe(false);
   });
 

@@ -1625,6 +1625,8 @@ export function InvestigationView({
       busy,
       requestPending,
       gone,
+      streamReady,
+      verificationPending,
       latestTurnStatus: lastTurn?.status,
     });
   const earlierPlan =

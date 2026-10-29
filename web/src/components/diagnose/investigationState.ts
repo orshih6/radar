@@ -801,25 +801,30 @@ export function canStopInvestigation(
 }
 
 // The hand-off resumes the agent's own session, so it waits until no turn is
-// writing to that session. A terminal transcript frame outranks a lagging
-// run summary, as for Stop.
+// writing to that session. A finished transcript outranks a run summary that
+// still says running, as for Stop; stopping does not, because Stop writes its
+// terminal frame before the agent process has exited.
 export function canContinueInOwnAgent(input: {
   run: RunSummary;
   busy: boolean;
   requestPending: boolean;
   gone: boolean;
+  streamReady: boolean;
+  verificationPending: boolean;
   latestTurnStatus?: Turn["status"];
 }): boolean {
-  const { run, busy, requestPending, gone, latestTurnStatus } = input;
+  const { run, latestTurnStatus } = input;
   const transcriptTerminal =
     latestTurnStatus === "done" || latestTurnStatus === "error";
   return (
-    !busy &&
-    !requestPending &&
-    !gone &&
+    input.streamReady &&
+    !input.busy &&
+    !input.requestPending &&
+    !input.verificationPending &&
+    !input.gone &&
+    run.status !== "stopping" &&
     latestTurnStatus !== "running" &&
-    (transcriptTerminal ||
-      (run.status !== "running" && run.status !== "stopping"))
+    (transcriptTerminal || run.status !== "running")
   );
 }
 
