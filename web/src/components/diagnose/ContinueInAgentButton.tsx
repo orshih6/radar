@@ -10,6 +10,7 @@ import {
 import { Check, ChevronDown, Copy, TerminalSquare } from "lucide-react";
 import { clsx } from "clsx";
 import { copyText } from "@skyhook-io/k8s-ui/utils/clipboard";
+import { Tooltip } from "../ui/Tooltip";
 import { useAnimatedUnmount } from "../../hooks/useAnimatedUnmount";
 import {
   TRANSITION_MENU,
@@ -47,22 +48,27 @@ export function ContinueInAgentButton({
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
-  // The menu lives inside the Findings scroller; open it upward when the
-  // scroller has no room below the trigger and enough above it.
-  const [openUp, setOpenUp] = useState(false);
+  const copyingRef = useRef(false);
+  // The menu lives inside the Findings scroller, which clips it: open toward
+  // the side with room, and cap the height when neither side has enough.
+  const [placement, setPlacement] = useState<{
+    up: boolean;
+    maxHeight?: number;
+  }>({ up: false });
 
   useLayoutEffect(() => {
     if (!open || !shouldRender) return;
     const trigger = rootRef.current?.getBoundingClientRect();
-    const menuHeight = menuRef.current?.offsetHeight ?? 0;
+    const menuHeight = menuRef.current?.scrollHeight ?? 0;
     if (!trigger) return;
     const bounds = rootRef.current
       ?.closest("[data-investigation-findings-scroll]")
       ?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
-    setOpenUp(
-      menuHeight + 8 > bounds.bottom - trigger.bottom &&
-        trigger.top - bounds.top > menuHeight + 8,
-    );
+    const below = bounds.bottom - trigger.bottom - 8;
+    const above = trigger.top - bounds.top - 8;
+    const up = menuHeight > below && above > below;
+    const room = up ? above : below;
+    setPlacement({ up, maxHeight: menuHeight > room ? room : undefined });
   }, [open, shouldRender]);
 
   useEffect(() => {
@@ -110,14 +116,20 @@ export function ContinueInAgentButton({
     openInTerminal(command, TERMINAL_TITLE);
   };
   const copyCommand = () => {
-    void copyText(command).then((ok) => setCopy(ok ? "copied" : "failed"));
+    // The clipboard fallback focuses a temporary textarea outside the menu.
+    copyingRef.current = true;
+    void copyText(command).then((ok) => {
+      copyingRef.current = false;
+      setCopy(ok ? "copied" : "failed");
+    });
   };
   // Only focus that lands somewhere else closes the menu. Safari does not
   // focus a clicked button, so a click inside blurs to nothing; clicks outside
   // are the pointerdown listener's job.
   const onFocusLeave = (event: FocusEvent<HTMLDivElement>) => {
     const next = event.relatedTarget as Node | null;
-    if (next && !rootRef.current?.contains(next)) setOpen(false);
+    if (next && !copyingRef.current && !rootRef.current?.contains(next))
+      setOpen(false);
   };
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Tab") {
@@ -147,18 +159,23 @@ export function ContinueInAgentButton({
       <div className="inline-flex rounded-md border border-theme-border bg-theme-surface">
         {localTerminal ? (
           <>
-            <button
-              type="button"
-              onClick={runInTerminal}
-              title={`Resume this session in ${label} with Radar's MCP, in Radar's terminal`}
-              className={clsx(segment, "rounded-l-md px-2")}
+            <Tooltip
+              content={`Resume this session in ${label} with Radar's MCP, in Radar's terminal`}
+              position="bottom"
+              wrapperClassName="inline-flex"
             >
-              <TerminalSquare
-                className="h-3.5 w-3.5 text-theme-text-tertiary"
-                aria-hidden
-              />
-              Continue in {label}
-            </button>
+              <button
+                type="button"
+                onClick={runInTerminal}
+                className={clsx(segment, "rounded-l-md px-2")}
+              >
+                <TerminalSquare
+                  className="h-3.5 w-3.5 text-theme-text-tertiary"
+                  aria-hidden
+                />
+                Continue in {label}
+              </button>
+            </Tooltip>
             <button
               ref={triggerRef}
               type="button"
@@ -210,18 +227,22 @@ export function ContinueInAgentButton({
           onKeyDown={onMenuKeyDown}
           className={clsx(
             "absolute right-0 z-30 w-[min(22rem,calc(100cqw-2rem))] rounded-lg border border-theme-border bg-theme-surface p-1 shadow-theme-lg",
-            openUp
+            placement.maxHeight !== undefined && "overflow-y-auto",
+            placement.up
               ? "bottom-full mb-1 origin-bottom-right"
               : "top-full mt-1 origin-top-right",
             TRANSITION_MENU,
             isOpen
               ? "translate-y-0 scale-100 opacity-100"
-              : openUp
+              : placement.up
                 ? "translate-y-1 scale-[0.97] opacity-0"
                 : "-translate-y-1 scale-[0.97] opacity-0",
             !open && "pointer-events-none",
           )}
-          style={overlayTransitionStyle(isOpen, "menu")}
+          style={{
+            ...overlayTransitionStyle(isOpen, "menu"),
+            maxHeight: placement.maxHeight,
+          }}
         >
           <div className="px-2 pb-1.5 pt-1">
             <p className="text-[11px] text-theme-text-tertiary">
