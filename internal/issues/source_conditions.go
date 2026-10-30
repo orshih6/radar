@@ -391,10 +391,12 @@ func detectGatewayRouteParentIssues(gvr schema.GroupVersionResource, kind string
 			if conditions.IsInProgressForIssues(reason) {
 				continue
 			}
-			msg, _ := cm["message"].(string)
+			// The controller has not reconciled the current spec for this parent
+			// yet, so the condition describes an earlier generation.
 			if observed, ok, _ := unstructured.NestedInt64(cm, "observedGeneration"); ok && gen > 0 && observed > 0 && observed < gen {
-				msg = strings.TrimSpace(fmt.Sprintf("Condition was last reported for generation %d; current resource generation is %d. %s", observed, gen, msg))
+				continue
 			}
+			msg, _ := cm["message"].(string)
 			gk := condType + "\x00" + reason + "\x00" + gwKey
 			g := groups[gk]
 			if g == nil {

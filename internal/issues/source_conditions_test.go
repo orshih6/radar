@@ -624,8 +624,8 @@ func TestDetectGatewayRouteParentIssues_StableIdentityAcrossListenerCount(t *tes
 
 // A route whose spec moved from one listener to another can keep the old
 // listener's failed status.parents entry (Envoy Gateway does not prune it). Only
-// parents still referenced by spec.parentRefs describe the live route; a lagging
-// observedGeneration on a current parent is still reported, but qualified.
+// parents still referenced by spec.parentRefs describe the live route, and a
+// condition from an earlier generation on a current parent is not reported.
 func TestDetectGatewayRouteParentIssues_IgnoresParentsRemovedFromSpec(t *testing.T) {
 	routeGVR := schema.GroupVersionResource{Group: "gateway.networking.k8s.io", Version: "v1", Resource: "httproutes"}
 	ts := time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339)
@@ -690,15 +690,16 @@ func TestDetectGatewayRouteParentIssues_IgnoresParentsRemovedFromSpec(t *testing
 			wantReasons: []string{"Accepted: NoMatchingParent"},
 		},
 		{
-			name:        "status without spec parentRefs is not filtered",
-			route:       route(nil, staleHTTPS),
+			name: "status without spec parentRefs is not filtered",
+			route: route(nil, map[string]any{
+				"parentRef":  gwRef("https"),
+				"conditions": []any{cond("Accepted", "False", "NoMatchingParent", "No listeners match this parent ref", 2)},
+			}),
 			wantReasons: []string{"Accepted: NoMatchingParent"},
 		},
 		{
-			name:        "lagging observedGeneration on a current parent is qualified",
-			route:       route([]any{gwRef("https")}, staleHTTPS),
-			wantReasons: []string{"Accepted: NoMatchingParent"},
-			wantMsg:     "Condition was last reported for generation 1; current resource generation is 2.",
+			name:  "lagging observedGeneration on a current parent is ignored",
+			route: route([]any{gwRef("https")}, staleHTTPS),
 		},
 	}
 	for _, tt := range tests {
